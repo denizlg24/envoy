@@ -67,5 +67,5 @@ pub fn logout() -> Result<()> {
 }
 
 pub fn auth_server_url() -> String {
-    return "https://envoy-server.fly.dev".to_string();
+    "https://envoy-server.fly.dev".to_string()
 }
