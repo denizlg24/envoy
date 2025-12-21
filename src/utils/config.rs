@@ -67,5 +67,5 @@ pub fn logout() -> Result<()> {
 }
 
 pub fn auth_server_url() -> String {
-    "https://envoy-server.fly.dev".to_string()
+    "https://envoy-cli.vercel.app/api".to_string()
 }
