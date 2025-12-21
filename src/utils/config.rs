@@ -67,5 +67,5 @@ pub fn logout() -> Result<()> {
 }
 
 pub fn auth_server_url() -> String {
-    std::env::var("ENVY_AUTH_SERVER").unwrap_or_else(|_| "http://localhost:3000".to_string())
+    return "https://envoy-server.fly.dev".to_string();
 }
