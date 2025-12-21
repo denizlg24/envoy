@@ -4,15 +4,14 @@ $ErrorActionPreference = 'Stop'
 # --- CONFIGURATION ---
 $repoOwner = "denizlg24"
 $repoName = "envoy"
-$binaryName = "envy.exe"   # The name you want the installed command to be
-# IF AUTO-DETECT FAILS: Enter your tag here (e.g. "v0.1.0") to force a specific version
+$binaryName = "envy.exe"
 $forceTag = "" 
 # ---------------------
 
 $installDir = "$env:LOCALAPPDATA\envoy"
 $binaryPath = "$installDir\$binaryName"
 $zipPath = "$installDir\temp_install.zip"
-$zipName = "envoy-x86_64-pc-windows-msvc.zip" # The exact name of the zip file in your release
+$zipName = "envoy-x86_64-pc-windows-msvc.zip"
 
 Write-Host "Installing Envoy CLI..." -ForegroundColor Cyan
 
@@ -82,7 +81,6 @@ try {
     Expand-Archive -Path $zipPath -DestinationPath $tempExtractPath -Force
     
     # Search for the binary inside the extracted folder (handles subfolders)
-    # We look for any .exe, or specifically envoy.exe if you prefer
     $extractedExe = Get-ChildItem -Path $tempExtractPath -Recurse -Filter "*.exe" | Select-Object -First 1
     
     if (!$extractedExe) {
