@@ -2,7 +2,7 @@ use std::path::Path;
 
 #[derive(serde::Deserialize)]
 struct SignedUrlResponse {
-    method: String, 
+    method: String,
     url: String,
 }
 
@@ -67,7 +67,7 @@ pub async fn download_blob(
         .bytes()
         .await?;
 
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
     let computed = format!("{:x}", hasher.finalize());
@@ -75,8 +75,7 @@ pub async fn download_blob(
         anyhow::bail!("Hash mismatch for blob {}", hash);
     }
 
-    let path = std::path::Path::new(".envoy/cache")
-        .join(format!("{}.blob", hash));
+    let path = std::path::Path::new(".envoy/cache").join(format!("{}.blob", hash));
 
     tokio::fs::write(path, &bytes).await?;
 
@@ -140,8 +139,7 @@ pub async fn download_manifest(
         .bytes()
         .await?;
 
-    let path = std::path::Path::new(".envoy/cache")
-        .join(format!("{}.blob", manifest_hash));
+    let path = std::path::Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 
     tokio::fs::create_dir_all(".envoy/cache").await?;
     tokio::fs::write(path, &bytes).await?;

@@ -1,12 +1,15 @@
-use std::path::Path;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::path::Path;
 
-use crate::{ utils::{
-    config::load_token, manifest::{load_manifest, save_manifest}, project_config::{get_remote_url, load_project_config}, storage::{upload_blob, upload_manifest}
-}};
+use crate::utils::{
+    config::load_token,
+    manifest::{load_manifest, save_manifest},
+    project_config::{get_remote_url, load_project_config},
+    storage::{upload_blob, upload_manifest},
+};
 
-pub async fn push(passphrase: &str,remote: Option<&str>) -> anyhow::Result<()> {
+pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> {
     let token = load_token()?;
     let project = load_project_config()?;
     let server = get_remote_url(&project, remote)?;
@@ -17,7 +20,7 @@ pub async fn push(passphrase: &str,remote: Option<&str>) -> anyhow::Result<()> {
 
     let total = manifest.files.len();
     println!("\n{} Pushing {} files...", style("→").cyan().bold(), total);
-    
+
     let pb = ProgressBar::new(total as u64);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -49,15 +52,12 @@ pub async fn push(passphrase: &str,remote: Option<&str>) -> anyhow::Result<()> {
         uploaded += 1;
         pb.inc(1);
     }
-    
+
     pb.finish_and_clear();
 
-  
     let manifest_hash = save_manifest(&manifest, passphrase)?;
 
-
-    let manifest_blob_path =
-        Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
+    let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 
     upload_manifest(
         &client,
@@ -69,12 +69,14 @@ pub async fn push(passphrase: &str,remote: Option<&str>) -> anyhow::Result<()> {
     )
     .await?;
 
-    println!("{} {} {}", 
-        style("✓").green().bold(), 
+    println!(
+        "{} {} {}",
+        style("✓").green().bold(),
         style("Uploaded").green(),
         style(format!("{} blobs", uploaded)).cyan()
     );
-    println!("{} {}", 
+    println!(
+        "{} {}",
         style("📦").cyan(),
         style(format!("Manifest: {}", &manifest_hash[..12])).dim()
     );

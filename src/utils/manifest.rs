@@ -7,6 +7,12 @@ pub struct Manifest {
     pub files: HashMap<String, String>,
 }
 
+impl Default for Manifest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Manifest {
     pub fn new() -> Self {
         Self {
@@ -61,4 +67,3 @@ pub fn load_manifest(passphrase: &str) -> Result<Manifest> {
 
     Ok(manifest)
 }
-

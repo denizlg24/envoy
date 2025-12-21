@@ -1,7 +1,7 @@
-pub mod init;
-pub mod crypto;
 pub mod auth;
-pub mod push;
+pub mod crypto;
+pub mod init;
 pub mod pull;
-pub mod satus;
+pub mod push;
 pub mod remote;
+pub mod satus;

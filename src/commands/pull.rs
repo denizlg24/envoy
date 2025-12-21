@@ -1,13 +1,16 @@
-use std::path::Path;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::path::Path;
 
-use crate::{commands::crypto::decrypt_bytes, utils::{
-    config::load_token,
-    manifest::load_manifest,
-    project_config::{get_remote_url, load_project_config},
-    storage::{download_blob, download_manifest},
-}};
+use crate::{
+    commands::crypto::decrypt_bytes,
+    utils::{
+        config::load_token,
+        manifest::load_manifest,
+        project_config::{get_remote_url, load_project_config},
+        storage::{download_blob, download_manifest},
+    },
+};
 
 pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> {
     let token = load_token()?;
@@ -45,8 +48,12 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
 
     let manifest = load_manifest(passphrase)?;
 
-    println!("\n{} Pulling {} files...", style("→").cyan().bold(), manifest.files.len());
-    
+    println!(
+        "\n{} Pulling {} files...",
+        style("→").cyan().bold(),
+        manifest.files.len()
+    );
+
     let pb = ProgressBar::new(manifest.files.len() as u64);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -71,18 +78,19 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         downloaded += 1;
         pb.inc(1);
     }
-    
+
     pb.finish_and_clear();
-    
+
     if downloaded > 0 {
-        println!("{} {}", 
+        println!(
+            "{} {}",
             style("✓").green().bold(),
             style(format!("Downloaded {} blobs", downloaded)).green()
         );
     }
 
     let mut restored = 0;
-    
+
     let pb = ProgressBar::new(manifest.files.len() as u64);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -106,9 +114,10 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         restored += 1;
         pb.inc(1);
     }
-    
+
     pb.finish_and_clear();
-    println!("{} {}", 
+    println!(
+        "{} {}",
         style("✓").green().bold(),
         style(format!("Restored {} files", restored)).green()
     );

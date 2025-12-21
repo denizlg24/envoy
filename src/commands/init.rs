@@ -1,7 +1,8 @@
-use std::fs;
-use std::path::Path;use console::style;
+use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
+use std::fs;
+use std::path::Path;
 
 use crate::{
     commands::auth::login,
@@ -42,10 +43,7 @@ pub fn ensure_gitignore() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
 
     if !existing.ends_with('\n') && !existing.is_empty() {
         writeln!(file)?;
@@ -62,10 +60,14 @@ pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
     let root = Path::new(".envoy");
 
     if root.exists() {
-        println!("{} {}", style("ℹ").cyan(), style("Envoy project already initialized.").cyan());
+        println!(
+            "{} {}",
+            style("ℹ").cyan(),
+            style("Envoy project already initialized.").cyan()
+        );
         return Ok(());
     }
-    
+
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -74,7 +76,7 @@ pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
             .unwrap(),
     );
     spinner.set_message("Creating project...");
-    
+
     let client = Client::new();
     let res: CreateProjectResponse = client
         .post(format!("{}/projects", auth_server_url()))

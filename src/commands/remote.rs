@@ -3,11 +3,9 @@ use std::fs;
 
 use crate::utils::project_config::load_project_config;
 
-
 pub fn add_remote(name: &str, url: &str) -> Result<()> {
-    
     let _project = load_project_config()?;
-    
+
     let path = ".envoy/config.toml";
     let contents = fs::read_to_string(path)?;
     let mut value: toml::Value = toml::from_str(&contents)?;
@@ -25,7 +23,8 @@ pub fn add_remote(name: &str, url: &str) -> Result<()> {
 
     fs::write(path, toml::to_string_pretty(&value)?)?;
 
-    println!("{} {} {} {}", 
+    println!(
+        "{} {} {} {}",
         console::style("✓").green().bold(),
         console::style("Added remote").green(),
         console::style(format!("'{}'", name)).cyan().bold(),

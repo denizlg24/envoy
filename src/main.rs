@@ -1,9 +1,7 @@
 use clap::{Parser, Subcommand};
 use dialoguer::Password;
 
-use crate::{
-    commands::{auth::logout_command, satus::status},
-};
+use crate::commands::{auth::logout_command, satus::status};
 
 pub mod commands;
 pub mod utils;
@@ -31,8 +29,7 @@ enum Commands {
     Init {
         name: Option<String>,
     },
-    Login {
-    },
+    Login {},
     Logout {},
     Push {
         remote: Option<String>,
@@ -46,7 +43,7 @@ enum Commands {
     },
     Remote {
         #[command(subcommand)]
-        command: RemoteCommand ,
+        command: RemoteCommand,
     },
 }
 
@@ -55,7 +52,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { name} => {
+        Commands::Init { name } => {
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -63,13 +60,17 @@ fn main() -> anyhow::Result<()> {
                 .block_on(async { commands::init::init_project(name).await });
 
             if let Err(e) = result {
-                eprintln!("{} {}", console::style("✗").red().bold(), console::style(format!("Initialization failed: {}", e)).red());
+                eprintln!(
+                    "{} {}",
+                    console::style("✗").red().bold(),
+                    console::style(format!("Initialization failed: {}", e)).red()
+                );
                 std::process::exit(1);
             }
 
             // Success message already shown by init_project
         }
-        Commands::Login {  } => {
+        Commands::Login {} => {
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -77,7 +78,11 @@ fn main() -> anyhow::Result<()> {
                 .block_on(async { commands::auth::login().await });
 
             if let Err(e) = result {
-                eprintln!("{} {}", console::style("✗").red().bold(), console::style(format!("Login failed: {}", e)).red());
+                eprintln!(
+                    "{} {}",
+                    console::style("✗").red().bold(),
+                    console::style(format!("Login failed: {}", e)).red()
+                );
                 std::process::exit(1);
             }
 
@@ -99,7 +104,11 @@ fn main() -> anyhow::Result<()> {
                 .interact()?;
 
             commands::crypto::encrypt_file(&input, &passphrase)?;
-            println!("{} {}", console::style("✓").green().bold(), console::style("File encrypted successfully").green());
+            println!(
+                "{} {}",
+                console::style("✓").green().bold(),
+                console::style("File encrypted successfully").green()
+            );
         }
 
         Commands::Decrypt {} => {
@@ -107,7 +116,11 @@ fn main() -> anyhow::Result<()> {
             let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
 
             commands::crypto::decrypt_files(&passphrase)?;
-            println!("{} {}", console::style("✓").green().bold(), console::style("File decrypted successfully").green());
+            println!(
+                "{} {}",
+                console::style("✓").green().bold(),
+                console::style("File decrypted successfully").green()
+            );
         }
 
         Commands::Push { remote } => {
@@ -118,10 +131,14 @@ fn main() -> anyhow::Result<()> {
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async { commands::push::push(&passphrase,remote.as_deref()).await });
+                .block_on(async { commands::push::push(&passphrase, remote.as_deref()).await });
 
             if let Err(e) = result {
-                eprintln!("{} {}", console::style("✗").red().bold(), console::style(format!("Push failed: {}", e)).red());
+                eprintln!(
+                    "{} {}",
+                    console::style("✗").red().bold(),
+                    console::style(format!("Push failed: {}", e)).red()
+                );
                 std::process::exit(1);
             }
 
@@ -136,10 +153,14 @@ fn main() -> anyhow::Result<()> {
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async { commands::pull::pull(&passphrase,remote.as_deref()).await });
+                .block_on(async { commands::pull::pull(&passphrase, remote.as_deref()).await });
 
             if let Err(e) = result {
-                eprintln!("{} {}", console::style("✗").red().bold(), console::style(format!("Pull failed: {}", e)).red());
+                eprintln!(
+                    "{} {}",
+                    console::style("✗").red().bold(),
+                    console::style(format!("Pull failed: {}", e)).red()
+                );
                 std::process::exit(1);
             }
 

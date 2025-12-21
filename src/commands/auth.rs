@@ -1,9 +1,9 @@
 use anyhow::{Ok, Result, bail};
+use console::style;
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::Deserialize;
 use tokio::time::{Duration, Instant, sleep};
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::utils::config::{auth_server_url, logout, save_token};
 
@@ -38,9 +38,17 @@ pub async fn login() -> Result<()> {
         .json::<DeviceCodeResponse>()
         .await?;
 
-    println!("\n{} {}", style("→").cyan().bold(), style("GitHub Authentication").bold());
+    println!(
+        "\n{} {}",
+        style("→").cyan().bold(),
+        style("GitHub Authentication").bold()
+    );
     println!("  {} {}", style("🔗").cyan(), device.verification_uri);
-    println!("  {} {}", style("🔑").cyan(), style(&device.user_code).yellow().bold());
+    println!(
+        "  {} {}",
+        style("🔑").cyan(),
+        style(&device.user_code).yellow().bold()
+    );
     println!();
 
     let spinner = ProgressBar::new_spinner();
@@ -56,7 +64,7 @@ pub async fn login() -> Result<()> {
 
     loop {
         spinner.tick();
-        
+
         if Instant::now() >= deadline {
             spinner.finish_and_clear();
             bail!("Authorization timed out");
@@ -85,7 +93,11 @@ pub async fn login() -> Result<()> {
 
             TokenResponse::Success { api_token } => {
                 spinner.finish_and_clear();
-                println!("{} {}", style("✓").green().bold(), style("Authentication successful!").green());
+                println!(
+                    "{} {}",
+                    style("✓").green().bold(),
+                    style("Authentication successful!").green()
+                );
                 save_token(&api_token)?;
                 return Ok(());
             }
