@@ -16,8 +16,6 @@ pub fn save_token(token: &str) -> Result<()> {
 
     fs::write(&file, contents)?;
 
-    // Silently save token - success message shown by caller
-
     Ok(())
 }
 

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
@@ -66,4 +66,21 @@ pub fn load_manifest(passphrase: &str) -> Result<Manifest> {
     }
 
     Ok(manifest)
+}
+
+const APPLIED_PATH: &str = ".envoy/cache/applied";
+
+pub fn read_applied() -> Option<String> {
+    fs::read_to_string(APPLIED_PATH)
+        .ok()
+        .map(|s| s.trim().to_string())
+}
+
+pub fn write_applied(hash: &str) -> anyhow::Result<()> {
+    if let Some(parent) = Path::new(APPLIED_PATH).parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(APPLIED_PATH, hash)?;
+    Ok(())
 }

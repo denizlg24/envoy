@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use dialoguer::Password;
 
-use crate::commands::{auth::logout_command, satus::status};
+use crate::commands::{auth::logout_command, status::status};
 
 pub mod commands;
 pub mod utils;
@@ -31,16 +31,14 @@ enum Commands {
     },
     Login {},
     Logout {},
+    Update {},
     Push {
         remote: Option<String>,
     },
     Pull {
         remote: Option<String>,
     },
-    Status {
-        #[arg(short, long)]
-        passphrase: Option<String>,
-    },
+    Status {},
     Remote {
         #[command(subcommand)]
         command: RemoteCommand,
@@ -52,6 +50,22 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Update {} => {
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async { commands::update::update().await });
+
+            if let Err(e) = result {
+                eprintln!(
+                    "{} {}",
+                    console::style("✗").red().bold(),
+                    console::style(format!("Update failed: {}", e)).red()
+                );
+                std::process::exit(1);
+            }
+        }
         Commands::Init { name } => {
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -67,8 +81,6 @@ fn main() -> anyhow::Result<()> {
                 );
                 std::process::exit(1);
             }
-
-            // Success message already shown by init_project
         }
         Commands::Login {} => {
             let result = tokio::runtime::Builder::new_current_thread()
@@ -85,8 +97,6 @@ fn main() -> anyhow::Result<()> {
                 );
                 std::process::exit(1);
             }
-
-            // Success message already shown by login
         }
         Commands::Logout {} => {
             logout_command()?;
@@ -141,8 +151,6 @@ fn main() -> anyhow::Result<()> {
                 );
                 std::process::exit(1);
             }
-
-            // Success details already shown by push
         }
 
         Commands::Pull { remote } => {
@@ -163,11 +171,11 @@ fn main() -> anyhow::Result<()> {
                 );
                 std::process::exit(1);
             }
-
-            // Success details already shown by pull
         }
-        Commands::Status { passphrase } => {
-            status(passphrase.as_deref())?;
+        Commands::Status {} => {
+            utils::initialized::check_initialized()?;
+            let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
+            status(&passphrase)?;
         }
     }
 

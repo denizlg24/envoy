@@ -31,7 +31,15 @@ use std::io::Write;
 pub fn ensure_gitignore() -> anyhow::Result<()> {
     let path = Path::new(".gitignore");
 
-    let envoy_block = "# Envoy\n.envoy/cache/\n.envoy/*.blob\n";
+    let envoy_block = r#"
+# Envoy
+
+!.envoy/
+
+.envoy/cache/
+.envoy/*.blob
+
+"#;
 
     let existing = if path.exists() {
         fs::read_to_string(path)?
@@ -75,6 +83,7 @@ pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
             .template("{spinner:.cyan} {msg}")
             .unwrap(),
     );
+    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
     spinner.set_message("Creating project...");
 
     let client = Client::new();

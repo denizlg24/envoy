@@ -58,13 +58,12 @@ pub async fn login() -> Result<()> {
             .template("{spinner:.cyan} {msg}")
             .unwrap(),
     );
+    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
     spinner.set_message("Waiting for authorization...");
 
     let deadline = Instant::now() + Duration::from_secs(device.expires_in);
 
     loop {
-        spinner.tick();
-
         if Instant::now() >= deadline {
             spinner.finish_and_clear();
             bail!("Authorization timed out");

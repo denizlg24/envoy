@@ -1,8 +1,11 @@
-use crate::utils::{manifest::load_manifest, project_config::load_project_config};
+use crate::utils::{
+    manifest::{load_manifest, read_applied},
+    project_config::load_project_config,
+};
 use console::style;
 use std::path::Path;
 
-pub fn status(passphrase: Option<&str>) -> anyhow::Result<()> {
+pub fn status(passphrase: &str) -> anyhow::Result<()> {
     let project = load_project_config()?;
 
     println!("\n{}", style("Envoy Status").cyan().bold().underlined());
@@ -30,11 +33,21 @@ pub fn status(passphrase: Option<&str>) -> anyhow::Result<()> {
         }
     };
 
+    let applied = read_applied();
+
     println!(
         "{} {}",
         style("📄").cyan(),
         style(format!("Manifest: {}", &latest[..12])).dim()
     );
+
+    if let Some(ref applied) = applied {
+        println!(
+            "{} {}",
+            style("🧩").cyan(),
+            style(format!("Applied:  {}", &applied[..12])).dim()
+        );
+    }
 
     let manifest_path = format!(".envoy/cache/{}.blob", latest);
 
@@ -53,61 +66,49 @@ pub fn status(passphrase: Option<&str>) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Optional: allow status without passphrase
-    let manifest = match passphrase {
-        Some(p) => load_manifest(p)?,
-        None => {
-            println!(
-                "\n{}",
-                style("⚠ Cannot inspect files without passphrase").yellow()
-            );
-            println!("{} {}", style("○").dim(), style("State: UNKNOWN").dim());
-            return Ok(());
-        }
-    };
+    let manifest = load_manifest(passphrase)?;
 
-    let mut present = 0;
     let mut missing = 0;
 
     for hash in manifest.files.values() {
         let path = Path::new(".envoy/cache").join(format!("{}.blob", hash));
-        if path.exists() {
-            present += 1;
-        } else {
+        if !path.exists() {
             missing += 1;
         }
     }
 
-    println!("\n{}", style("Blobs:").bold());
-    println!(
-        "  {} {}",
-        style("✓").green(),
-        style(format!("present: {}", present)).green()
-    );
-    if missing > 0 {
-        println!(
-            "  {} {}",
-            style("✗").red(),
-            style(format!("missing: {}", missing)).red()
-        );
-    }
+    let is_applied = applied.as_deref() == Some(&latest);
+    let has_all_blobs = missing == 0;
 
-    if missing == 0 {
+    println!("\n{}", style("State:").bold());
+
+    if !has_all_blobs {
         println!(
-            "\n{} {}",
-            style("●").green(),
-            style("State: UP TO DATE").green().bold()
-        );
-    } else {
-        println!(
-            "\n{} {}",
+            "{} {}",
             style("○").yellow(),
-            style("State: OUT OF SYNC").yellow().bold()
+            style("OUT OF SYNC (missing data)").yellow().bold()
         );
         println!(
             "{} run {}",
             style("💡").yellow(),
             style("`envy pull`").cyan()
+        );
+    } else if !is_applied {
+        println!(
+            "{} {}",
+            style("○").yellow(),
+            style("OUT OF SYNC (not applied)").yellow().bold()
+        );
+        println!(
+            "{} run {}",
+            style("💡").yellow(),
+            style("`envy pull`").cyan()
+        );
+    } else {
+        println!(
+            "{} {}",
+            style("●").green(),
+            style("UP TO DATE").green().bold()
         );
     }
 

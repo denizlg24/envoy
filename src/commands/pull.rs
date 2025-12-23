@@ -6,7 +6,7 @@ use crate::{
     commands::crypto::decrypt_bytes,
     utils::{
         config::load_token,
-        manifest::load_manifest,
+        manifest::{load_manifest, read_applied, write_applied},
         project_config::{get_remote_url, load_project_config},
         storage::{download_blob, download_manifest},
     },
@@ -24,6 +24,17 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         .trim()
         .to_string();
 
+    if let Some(applied) = read_applied()
+        && applied == manifest_hash
+    {
+        println!(
+            "{} {}",
+            style("✓").green().bold(),
+            style("Already up to date").green()
+        );
+        return Ok(());
+    }
+
     let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 
     if !manifest_blob_path.exists() {
@@ -34,6 +45,7 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
                 .template("{spinner:.cyan} {msg}")
                 .unwrap(),
         );
+        spinner.enable_steady_tick(std::time::Duration::from_millis(80));
         spinner.set_message("Downloading manifest...");
         download_manifest(
             &client,
@@ -120,6 +132,12 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         "{} {}",
         style("✓").green().bold(),
         style(format!("Restored {} files", restored)).green()
+    );
+    write_applied(&manifest_hash)?;
+    println!(
+        "{} Updated to {}",
+        style("✓").green().bold(),
+        style(&manifest_hash[..8]).yellow().bold()
     );
     Ok(())
 }
