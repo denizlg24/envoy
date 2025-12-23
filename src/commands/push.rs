@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::utils::{
     config::load_token,
-    manifest::{load_manifest, save_manifest},
+    manifest::{load_manifest, save_manifest, write_applied},
     project_config::{get_remote_url, load_project_config},
     storage::{upload_blob, upload_manifest},
 };
@@ -68,6 +68,8 @@ pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         &manifest_blob_path,
     )
     .await?;
+
+    write_applied(&manifest_hash)?;
 
     println!(
         "{} {} {}",
