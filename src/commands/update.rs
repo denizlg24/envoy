@@ -68,6 +68,12 @@ pub async fn update() -> Result<()> {
     println!();
     let extracted_binary = download_and_extract(&asset.browser_download_url).await?;
 
+    eprintln!("[DEBUG] Extracted binary path: {:?}", extracted_binary);
+    eprintln!(
+        "[DEBUG] Extracted binary exists before replace_self: {}",
+        extracted_binary.exists()
+    );
+
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
@@ -79,6 +85,9 @@ pub async fn update() -> Result<()> {
     spinner.set_message("Applying update...");
     replace_self(&extracted_binary)?;
     spinner.finish_and_clear();
+
+    // Clean up temporary binary
+    let _ = std::fs::remove_file(&extracted_binary);
 
     println!(
         "{} {}",
@@ -141,7 +150,7 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
     let archive_clone = archive_path.clone();
     let tmp_path = tmp.path().to_path_buf();
 
-    let binary = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
+    let binary_in_tmp = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
         if url_owned.ends_with(".tar.gz") {
             extract_tar_gz(&archive_clone, &tmp_path)?;
         } else if url_owned.ends_with(".zip") {
@@ -149,9 +158,23 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
         } else {
             return Err(anyhow!("Unknown archive format"));
         }
-        find_binary(&tmp_path)
+        let binary = find_binary(&tmp_path)?;
+        eprintln!("[DEBUG] Found binary in archive: {:?}", binary);
+        eprintln!("[DEBUG] Binary exists: {}", binary.exists());
+        Ok(binary)
     })
     .await??;
+
+    eprintln!("[DEBUG] Binary in tmp path: {:?}", binary_in_tmp);
+    eprintln!("[DEBUG] Binary in tmp exists: {}", binary_in_tmp.exists());
+
+    let persistent_path = std::env::temp_dir().join(format!("envy-update-{}", std::process::id()));
+    eprintln!("[DEBUG] Copying to persistent path: {:?}", persistent_path);
+    tokio::fs::copy(&binary_in_tmp, &persistent_path).await?;
+    eprintln!(
+        "[DEBUG] Copy complete, persistent file exists: {}",
+        persistent_path.exists()
+    );
 
     spinner.finish_and_clear();
 
@@ -161,7 +184,7 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
         style("Downloaded and extracted").green()
     );
 
-    Ok(binary)
+    Ok(persistent_path)
 }
 
 fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
@@ -213,8 +236,13 @@ fn find_binary(dir: &Path) -> Result<PathBuf> {
 }
 
 fn replace_self(new_binary: &Path) -> Result<()> {
+    eprintln!("[DEBUG] replace_self called with: {:?}", new_binary);
+    eprintln!("[DEBUG] new_binary exists: {}", new_binary.exists());
+
     let current = std::env::current_exe()?;
+    eprintln!("[DEBUG] current exe: {:?}", current);
     let backup = current.with_extension("old");
+    eprintln!("[DEBUG] backup path: {:?}", backup);
 
     #[cfg(unix)]
     {
