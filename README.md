@@ -50,6 +50,20 @@ If you understand Git, Envoy will feel familiar.
 
 ## Installation
 
+### Quick Install
+
+**macOS/Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/denizlg24/envoy/master/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/denizlg24/envoy/master/install.ps1 | iex
+```
+
+### From Source
+
 **Requirements**
 - Rust (stable)
 - Cargo
