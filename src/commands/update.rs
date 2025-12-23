@@ -68,7 +68,6 @@ pub async fn update() -> Result<()> {
     println!();
     let extracted_binary = download_and_extract(&asset.browser_download_url).await?;
 
-    
     eprintln!(
         "[DEBUG] Extracted binary exists before replace_self: {}",
         extracted_binary.exists()
@@ -159,17 +158,13 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
             return Err(anyhow!("Unknown archive format"));
         }
         let binary = find_binary(&tmp_path)?;
-        
-        
+
         Ok(binary)
     })
     .await??;
 
-    
-    
-
     let persistent_path = std::env::temp_dir().join(format!("envy-update-{}", std::process::id()));
-    
+
     tokio::fs::copy(&binary_in_tmp, &persistent_path).await?;
     eprintln!(
         "[DEBUG] Copy complete, persistent file exists: {}",
@@ -236,13 +231,9 @@ fn find_binary(dir: &Path) -> Result<PathBuf> {
 }
 
 fn replace_self(new_binary: &Path) -> Result<()> {
-    
-    
-
     let current = std::env::current_exe()?;
-    
+
     let backup = current.with_extension("old");
-    
 
     #[cfg(unix)]
     {
