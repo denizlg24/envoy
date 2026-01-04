@@ -19,7 +19,7 @@ pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     let client = reqwest::Client::new();
 
     let total = manifest.files.len();
-    println!("\n{} Pushing {} files...", style("→").cyan().bold(), total);
+    println!("\n{} Pushing {} files...", style(">").cyan().bold(), total);
 
     let pb = ProgressBar::new(total as u64);
     pb.set_style(

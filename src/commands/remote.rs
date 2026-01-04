@@ -28,7 +28,7 @@ pub fn add_remote(name: &str, url: &str) -> Result<()> {
         console::style("✓").green().bold(),
         console::style("Added remote").green(),
         console::style(format!("'{}'", name)).cyan().bold(),
-        console::style(format!("→ {}", url)).dim()
+        console::style(format!("> {}", url)).dim()
     );
     Ok(())
 }

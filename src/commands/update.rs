@@ -48,7 +48,7 @@ pub async fn update() -> Result<()> {
 
     println!(
         "\n{} {}",
-        style("→").cyan().bold(),
+        style(">").cyan().bold(),
         style("Update Available").bold()
     );
     println!("  {} v{}", style("Current:").dim(), CURRENT_VERSION);
@@ -95,7 +95,7 @@ pub async fn update() -> Result<()> {
     );
     println!(
         "  {} {}",
-        style("ℹ").cyan(),
+        style("[i]").cyan(),
         style("Restart envoy to use the new version").dim()
     );
     Ok(())

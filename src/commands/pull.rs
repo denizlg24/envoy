@@ -62,7 +62,7 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
 
     println!(
         "\n{} Pulling {} files...",
-        style("→").cyan().bold(),
+        style(">").cyan().bold(),
         manifest.files.len()
     );
 

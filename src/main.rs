@@ -20,6 +20,18 @@ enum RemoteCommand {
 }
 
 #[derive(Subcommand)]
+enum MemberCommand {
+    Add {
+        github: String,
+        #[arg(short, long)]
+        nickname: String,
+    },
+    List {},
+    Remove { user_id: String },
+    RemoveAll {},
+}
+
+#[derive(Subcommand)]
 enum Commands {
     Encrypt {
         #[arg(short, long, default_value = ".env")]
@@ -42,6 +54,10 @@ enum Commands {
     Remote {
         #[command(subcommand)]
         command: RemoteCommand,
+    },
+    Member {
+        #[command(subcommand)]
+        command: MemberCommand,
     },
 }
 
@@ -177,6 +193,84 @@ fn main() -> anyhow::Result<()> {
             let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
             status(&passphrase)?;
         }
+        Commands::Member { command } => match command {
+            MemberCommand::Add { github, nickname } => {
+                utils::initialized::check_initialized()?;
+                let username = utils::members::parse_github_username(&github)?;
+
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        let github_id = utils::members::resolve_github_user(&username).await?;
+                        commands::member::add_member(github_id, &nickname).await
+                    });
+
+                if let Err(e) = result {
+                    eprintln!(
+                        "{} {}",
+                        console::style("✗").red().bold(),
+                        console::style(format!("Add member failed: {}", e)).red()
+                    );
+                    std::process::exit(1);
+                }
+            }
+            MemberCommand::List {} => {
+                utils::initialized::check_initialized()?;
+
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async { commands::member::list_members().await });
+
+                if let Err(e) = result {
+                    eprintln!(
+                        "{} {}",
+                        console::style("✗").red().bold(),
+                        console::style(format!("List members failed: {}", e)).red()
+                    );
+                    std::process::exit(1);
+                }
+            }
+            MemberCommand::Remove { user_id } => {
+                utils::initialized::check_initialized()?;
+
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async { commands::member::remove_member(&user_id).await });
+
+                if let Err(e) = result {
+                    eprintln!(
+                        "{} {}",
+                        console::style("✗").red().bold(),
+                        console::style(format!("Remove member failed: {}", e)).red()
+                    );
+                    std::process::exit(1);
+                }
+            }
+            MemberCommand::RemoveAll {} => {
+                utils::initialized::check_initialized()?;
+
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async { commands::member::remove_all_members().await });
+
+                if let Err(e) = result {
+                    eprintln!(
+                        "{} {}",
+                        console::style("✗").red().bold(),
+                        console::style(format!("Remove all members failed: {}", e)).red()
+                    );
+                    std::process::exit(1);
+                }
+            }
+        },
     }
 
     Ok(())

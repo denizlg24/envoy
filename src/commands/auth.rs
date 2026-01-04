@@ -5,7 +5,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use tokio::time::{Duration, Instant, sleep};
 
-use crate::utils::config::{auth_server_url, logout, save_token};
+use crate::utils::config::{auth_server_url, load_token, logout, save_token};
 
 #[derive(Deserialize)]
 struct DeviceCodeResponse {
@@ -29,6 +29,15 @@ enum TokenResponse {
 }
 
 pub async fn login() -> Result<()> {
+    if load_token().is_ok() {
+        println!(
+            "{} {}",
+            style("[i]").cyan().bold(),
+            style("Already logged in").cyan()
+        );
+        return Ok(());
+    }
+
     let client = Client::new();
 
     let device: DeviceCodeResponse = client
@@ -40,13 +49,13 @@ pub async fn login() -> Result<()> {
 
     println!(
         "\n{} {}",
-        style("→").cyan().bold(),
+        style(">").cyan().bold(),
         style("GitHub Authentication").bold()
     );
-    println!("  {} {}", style("🔗").cyan(), device.verification_uri);
+    println!("  {} {}", style(">").cyan(), device.verification_uri);
     println!(
         "  {} {}",
-        style("🔑").cyan(),
+        style("*").cyan(),
         style(&device.user_code).yellow().bold()
     );
     println!();

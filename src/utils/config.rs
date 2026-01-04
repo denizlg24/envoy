@@ -56,7 +56,7 @@ pub fn logout() -> Result<()> {
     } else {
         println!(
             "{} {}",
-            console::style("ℹ").cyan(),
+            console::style("[i]").cyan(),
             console::style("Already logged out.").cyan()
         );
     }

@@ -70,7 +70,7 @@ pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
     if root.exists() {
         println!(
             "{} {}",
-            style("ℹ").cyan(),
+            style("[i]").cyan(),
             style("Envoy project already initialized.").cyan()
         );
         return Ok(());

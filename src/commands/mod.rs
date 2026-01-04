@@ -6,3 +6,4 @@ pub mod push;
 pub mod remote;
 pub mod status;
 pub mod update;
+pub mod member;

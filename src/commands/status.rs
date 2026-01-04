@@ -18,15 +18,15 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
     let latest = match std::fs::read_to_string(".envoy/latest") {
         Ok(v) => v.trim().to_string(),
         Err(_) => {
-            println!("{} {}", style("📄").dim(), style("Manifest: none").dim());
+            println!("{} {}", style("-").dim(), style("Manifest: none").dim());
             println!(
                 "\n{} {}",
-                style("○").yellow(),
+                style("o").yellow(),
                 style("State: EMPTY").yellow().bold()
             );
             println!(
                 "{} run {}",
-                style("💡").yellow(),
+                style("!").yellow(),
                 style("`envy push`").cyan()
             );
             return Ok(());
@@ -37,14 +37,14 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
 
     println!(
         "{} {}",
-        style("📄").cyan(),
+        style("-").cyan(),
         style(format!("Manifest: {}", &latest[..12])).dim()
     );
 
     if let Some(ref applied) = applied {
         println!(
             "{} {}",
-            style("🧩").cyan(),
+            style("#").cyan(),
             style(format!("Applied:  {}", &applied[..12])).dim()
         );
     }
@@ -52,15 +52,15 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
     let manifest_path = format!(".envoy/cache/{}.blob", latest);
 
     if !Path::new(&manifest_path).exists() {
-        println!("\n{}", style("⚠ Manifest blob missing locally").yellow());
+        println!("\n{}", style("[!] Manifest blob missing locally").yellow());
         println!(
             "{} {}",
-            style("○").yellow(),
+            style("o").yellow(),
             style("State: OUT OF SYNC").yellow().bold()
         );
         println!(
             "{} run {}",
-            style("💡").yellow(),
+            style("!").yellow(),
             style("`envy pull`").cyan()
         );
         return Ok(());
@@ -85,29 +85,29 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
     if !has_all_blobs {
         println!(
             "{} {}",
-            style("○").yellow(),
+            style("o").yellow(),
             style("OUT OF SYNC (missing data)").yellow().bold()
         );
         println!(
             "{} run {}",
-            style("💡").yellow(),
+            style("!").yellow(),
             style("`envy pull`").cyan()
         );
     } else if !is_applied {
         println!(
             "{} {}",
-            style("○").yellow(),
+            style("o").yellow(),
             style("OUT OF SYNC (not applied)").yellow().bold()
         );
         println!(
             "{} run {}",
-            style("💡").yellow(),
+            style("!").yellow(),
             style("`envy pull`").cyan()
         );
     } else {
         println!(
             "{} {}",
-            style("●").green(),
+            style("*").green(),
             style("UP TO DATE").green().bold()
         );
     }
