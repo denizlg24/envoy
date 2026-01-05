@@ -1,10 +1,10 @@
 use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 
 use crate::utils::{
     config::{auth_server_url, load_token},
     project_config::load_project_config,
+    ui::{create_spinner, print_header, print_info, print_kv, print_success},
 };
 
 #[derive(Deserialize)]
@@ -19,6 +19,7 @@ struct ProjectMember {
     user_id: String,
     role: String,
     #[serde(rename = "projectId")]
+    #[allow(dead_code)]
     project_id: String,
     nickname: Option<String>,
 }
@@ -49,15 +50,7 @@ pub async fn add_member(github_id: u64, nickname: &str) -> anyhow::Result<()> {
     let project = load_project_config()?;
     let client = reqwest::Client::new();
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message(format!("Adding member '{}'...", nickname));
+    let spinner = create_spinner(&format!("Adding member '{}'...", nickname));
 
     let response = client
         .post(format!(
@@ -80,33 +73,13 @@ pub async fn add_member(github_id: u64, nickname: &str) -> anyhow::Result<()> {
 
     let member = response.project_member;
 
-    println!(
-        "{} {}",
-        style("✓").green().bold(),
-        style("Member added successfully!").green()
-    );
+    print_success("Member added successfully!");
     if let Some(nick) = &member.nickname {
-        println!(
-            "  {} Nickname: {}",
-            style("@").cyan(),
-            style(nick).cyan().bold()
-        );
+        print_kv("Nickname:", nick);
     }
-    println!(
-        "  {} User ID: {}",
-        style(">").cyan(),
-        style(&member.user_id).dim()
-    );
-    println!(
-        "  {} Role: {}",
-        style("*").cyan(),
-        style(&member.role).yellow()
-    );
-    println!(
-        "  {} Project: {}",
-        style("📦").cyan(),
-        style(&member.project_id).dim()
-    );
+    print_kv("User ID:", &member.user_id);
+    print_kv("Role:", &member.role);
+
     Ok(())
 }
 
@@ -115,15 +88,7 @@ pub async fn list_members() -> anyhow::Result<()> {
     let project = load_project_config()?;
     let client = reqwest::Client::new();
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Fetching project members...");
+    let spinner = create_spinner("Fetching project members...");
 
     let response = client
         .get(format!(
@@ -143,41 +108,29 @@ pub async fn list_members() -> anyhow::Result<()> {
     let members = response.members;
 
     if members.is_empty() {
-        println!(
-            "{} {}",
-            style("[i]").blue().bold(),
-            style("No members found in this project").dim()
-        );
+        print_info("No members found in this project");
         return Ok(());
     }
 
-    println!(
-        "\n{} {} {}",
-        style(">").cyan().bold(),
-        style("Project Members").bold(),
-        style(format!("({})", members.len())).dim()
-    );
-    println!();
+    print_header(&format!("Project Members ({})", members.len()));
 
     for member in members {
+        println!();
         if let Some(nickname) = &member.nickname {
-            println!(
-                "  {} {}",
-                style("@").cyan(),
-                style(nickname).cyan().bold()
-            );
+            println!("  {} {}", style("•").cyan(), style(nickname).bold());
+        } else {
+            println!("  {} {}", style("•").cyan(), style("(no nickname)").dim());
         }
         println!(
             "    {} {}",
-            style(">").dim(),
-            style(&member.user_id).white()
+            style("ID:").dim(),
+            style(&member.user_id).dim()
         );
         println!(
             "    {} {}",
-            style("*").dim(),
+            style("Role:").dim(),
             style(&member.role).yellow()
         );
-        println!();
     }
 
     Ok(())
@@ -188,15 +141,10 @@ pub async fn remove_member(user_id: &str) -> anyhow::Result<()> {
     let project = load_project_config()?;
     let client = reqwest::Client::new();
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message(format!("Removing member {}...", user_id));
+    let spinner = create_spinner(&format!(
+        "Removing member {}...",
+        &user_id[..8.min(user_id.len())]
+    ));
 
     let response = client
         .delete(format!(
@@ -216,21 +164,12 @@ pub async fn remove_member(user_id: &str) -> anyhow::Result<()> {
 
     let deleted = response.deleted_member;
 
-    println!(
-        "{} {}",
-        style("[-]").red(),
-        style("Member removed successfully!").white()
-    );
-    println!(
-        "  {} User ID: {}",
-        style(">").cyan(),
-        style(&deleted.user_id).cyan()
-    );
-    println!(
-        "  {} Role: {}",
-        style("*").cyan(),
-        style(&deleted.role).dim()
-    );
+    print_success("Member removed");
+    print_kv("User ID:", &deleted.user_id);
+    if let Some(nickname) = &deleted.nickname {
+        print_kv("Nickname:", nickname);
+    }
+
     Ok(())
 }
 
@@ -239,15 +178,7 @@ pub async fn remove_all_members() -> anyhow::Result<()> {
     let project = load_project_config()?;
     let client = reqwest::Client::new();
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Removing all members...");
+    let spinner = create_spinner("Removing all members...");
 
     let response = client
         .delete(format!(
@@ -264,11 +195,7 @@ pub async fn remove_all_members() -> anyhow::Result<()> {
 
     spinner.finish_and_clear();
 
-    println!(
-        "{} Removed {} member(s)",
-        style("[-]").red(),
-        style(response.deleted_count.to_string()).yellow().bold()
-    );
+    print_success(&format!("Removed {} member(s)", response.deleted_count));
 
     Ok(())
 }

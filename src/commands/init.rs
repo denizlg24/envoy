@@ -1,12 +1,15 @@
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use std::fs;
 use std::path::Path;
 
 use crate::{
     commands::auth::login,
-    utils::config::{auth_server_url, load_token},
+    utils::{
+        config::{auth_server_url, load_token},
+        ui::{
+            create_spinner, print_header, print_info, print_kv, print_kv_highlight, print_success,
+        },
+    },
 };
 
 #[derive(serde::Deserialize)]
@@ -68,23 +71,11 @@ pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
     let root = Path::new(".envoy");
 
     if root.exists() {
-        println!(
-            "{} {}",
-            style("[i]").cyan(),
-            style("Envoy project already initialized.").cyan()
-        );
+        print_info("Envoy project already initialized.");
         return Ok(());
     }
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Creating project...");
+    let spinner = create_spinner("Creating project...");
 
     let client = Client::new();
     let res: CreateProjectResponse = client
@@ -120,8 +111,14 @@ origin = "{}"
 
     fs::write(root.join("config.toml"), config)?;
     ensure_gitignore()?;
-    println!("Envoy project initialized");
-    println!("Project ID: {}", project_id);
+    spinner.finish_and_clear();
+
+    print_header("Project Initialized");
+    print_kv_highlight("Name:", &project_name);
+    print_kv("Project ID:", &project_id);
+    print_kv("Remote:", &server_url);
+    println!();
+    print_success("Ready to use! Run `envy push` to upload your .env files.");
 
     Ok(())
 }

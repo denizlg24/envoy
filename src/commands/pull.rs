@@ -1,5 +1,3 @@
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 use crate::{
@@ -9,6 +7,7 @@ use crate::{
         manifest::{load_manifest, read_applied, write_applied},
         project_config::{get_remote_url, load_project_config},
         storage::{download_blob, download_manifest},
+        ui::{create_progress_bar, create_spinner, print_header, print_success},
     },
 };
 
@@ -27,26 +26,14 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     if let Some(applied) = read_applied()
         && applied == manifest_hash
     {
-        println!(
-            "{} {}",
-            style("✓").green().bold(),
-            style("Already up to date").green()
-        );
+        print_success("Already up to date");
         return Ok(());
     }
 
     let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 
     if !manifest_blob_path.exists() {
-        let spinner = ProgressBar::new_spinner();
-        spinner.set_style(
-            ProgressStyle::default_spinner()
-                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-                .template("{spinner:.cyan} {msg}")
-                .unwrap(),
-        );
-        spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-        spinner.set_message("Downloading manifest...");
+        let spinner = create_spinner("Downloading manifest...");
         download_manifest(
             &client,
             &server,
@@ -60,19 +47,9 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
 
     let manifest = load_manifest(passphrase)?;
 
-    println!(
-        "\n{} Pulling {} files...",
-        style(">").cyan().bold(),
-        manifest.files.len()
-    );
+    print_header(&format!("Pulling {} files", manifest.files.len()));
 
-    let pb = ProgressBar::new(manifest.files.len() as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("█▓▒░"),
-    );
+    let pb = create_progress_bar(manifest.files.len() as u64);
 
     let mut downloaded = 0;
 
@@ -94,22 +71,12 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     pb.finish_and_clear();
 
     if downloaded > 0 {
-        println!(
-            "{} {}",
-            style("✓").green().bold(),
-            style(format!("Downloaded {} blobs", downloaded)).green()
-        );
+        print_success(&format!("Downloaded {} blobs", downloaded));
     }
 
     let mut restored = 0;
 
-    let pb = ProgressBar::new(manifest.files.len() as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("█▓▒░"),
-    );
+    let pb = create_progress_bar(manifest.files.len() as u64);
     pb.set_message("Restoring files...");
 
     for (file_path, hash) in &manifest.files {
@@ -128,16 +95,8 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     }
 
     pb.finish_and_clear();
-    println!(
-        "{} {}",
-        style("✓").green().bold(),
-        style(format!("Restored {} files", restored)).green()
-    );
+    print_success(&format!("Restored {} files", restored));
     write_applied(&manifest_hash)?;
-    println!(
-        "{} Updated to {}",
-        style("✓").green().bold(),
-        style(&manifest_hash[..8]).yellow().bold()
-    );
+    print_success(&format!("Updated to {}", &manifest_hash[..8]));
     Ok(())
 }

@@ -5,7 +5,7 @@ pub fn parse_github_username(input: &str) -> anyhow::Result<String> {
         let url = input.trim_end_matches('/');
         let username = url
             .split('/')
-            .last()
+            .next_back()
             .ok_or_else(|| anyhow::anyhow!("Invalid GitHub URL"))?;
         Ok(username.to_string())
     } else {

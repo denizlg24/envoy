@@ -1,6 +1,7 @@
 use crate::utils::{
     manifest::{load_manifest, read_applied},
     project_config::load_project_config,
+    ui::{print_header, print_info, print_kv, print_success, print_warn},
 };
 use console::style;
 use std::path::Path;
@@ -8,61 +9,35 @@ use std::path::Path;
 pub fn status(passphrase: &str) -> anyhow::Result<()> {
     let project = load_project_config()?;
 
-    println!("\n{}", style("Envoy Status").cyan().bold().underlined());
-    println!(
-        "\n{} {}",
-        style("📦").cyan(),
-        style(format!("Project: {}", project.project_id)).dim()
-    );
+    print_header("Envoy Status");
+    print_kv("Project:", &project.project_id);
 
     let latest = match std::fs::read_to_string(".envoy/latest") {
         Ok(v) => v.trim().to_string(),
         Err(_) => {
-            println!("{} {}", style("-").dim(), style("Manifest: none").dim());
-            println!(
-                "\n{} {}",
-                style("o").yellow(),
-                style("State: EMPTY").yellow().bold()
-            );
-            println!(
-                "{} run {}",
-                style("!").yellow(),
-                style("`envy push`").cyan()
-            );
+            print_info("Manifest: none");
+            println!();
+            print_warn("State: EMPTY");
+            print_info(&format!("Run {}", style("`envy push`").cyan()));
             return Ok(());
         }
     };
 
     let applied = read_applied();
 
-    println!(
-        "{} {}",
-        style("-").cyan(),
-        style(format!("Manifest: {}", &latest[..12])).dim()
-    );
+    print_kv("Manifest:", &latest[..12]);
 
     if let Some(ref applied) = applied {
-        println!(
-            "{} {}",
-            style("#").cyan(),
-            style(format!("Applied:  {}", &applied[..12])).dim()
-        );
+        print_kv("Applied:", &applied[..12]);
     }
 
     let manifest_path = format!(".envoy/cache/{}.blob", latest);
 
     if !Path::new(&manifest_path).exists() {
-        println!("\n{}", style("[!] Manifest blob missing locally").yellow());
-        println!(
-            "{} {}",
-            style("o").yellow(),
-            style("State: OUT OF SYNC").yellow().bold()
-        );
-        println!(
-            "{} run {}",
-            style("!").yellow(),
-            style("`envy pull`").cyan()
-        );
+        println!();
+        print_warn("Manifest blob missing locally");
+        print_warn("State: OUT OF SYNC");
+        print_info(&format!("Run {}", style("`envy pull`").cyan()));
         return Ok(());
     }
 
@@ -80,36 +55,16 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
     let is_applied = applied.as_deref() == Some(&latest);
     let has_all_blobs = missing == 0;
 
-    println!("\n{}", style("State:").bold());
+    println!();
 
     if !has_all_blobs {
-        println!(
-            "{} {}",
-            style("o").yellow(),
-            style("OUT OF SYNC (missing data)").yellow().bold()
-        );
-        println!(
-            "{} run {}",
-            style("!").yellow(),
-            style("`envy pull`").cyan()
-        );
+        print_warn("State: OUT OF SYNC (missing data)");
+        print_info(&format!("Run {}", style("`envy pull`").cyan()));
     } else if !is_applied {
-        println!(
-            "{} {}",
-            style("o").yellow(),
-            style("OUT OF SYNC (not applied)").yellow().bold()
-        );
-        println!(
-            "{} run {}",
-            style("!").yellow(),
-            style("`envy pull`").cyan()
-        );
+        print_warn("State: OUT OF SYNC (not applied)");
+        print_info(&format!("Run {}", style("`envy pull`").cyan()));
     } else {
-        println!(
-            "{} {}",
-            style("*").green(),
-            style("UP TO DATE").green().bold()
-        );
+        print_success("State: UP TO DATE");
     }
 
     Ok(())

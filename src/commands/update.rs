@@ -1,13 +1,16 @@
 use anyhow::{Result, anyhow};
 use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
+
+use crate::utils::ui::{
+    create_spinner, print_header, print_info, print_kv, print_success, print_warn,
+};
 
 const REPO: &str = "denizlg24/envoy";
 const USER_AGENT: &str = "envy-cli";
 
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Deserialize)]
 struct Release {
@@ -22,15 +25,7 @@ struct Asset {
 }
 
 pub async fn update() -> Result<()> {
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Checking for updates...");
+    let spinner = create_spinner("Checking for updates...");
 
     let release = fetch_latest_release().await?;
     let latest = release.tag_name.trim_start_matches('v');
@@ -38,24 +33,16 @@ pub async fn update() -> Result<()> {
     spinner.finish_and_clear();
 
     if latest == CURRENT_VERSION {
-        println!(
-            "{} {}",
-            style("✓").green().bold(),
-            style(format!("Already up to date (v{})", CURRENT_VERSION)).green()
-        );
+        print_success(&format!("Already up to date (v{})", CURRENT_VERSION));
         return Ok(());
     }
 
+    print_header("Update Available");
+    print_kv("Current:", &format!("v{}", CURRENT_VERSION));
     println!(
-        "\n{} {}",
-        style(">").cyan().bold(),
-        style("Update Available").bold()
-    );
-    println!("  {} v{}", style("Current:").dim(), CURRENT_VERSION);
-    println!(
-        "  {} v{}",
-        style("Latest: ").dim(),
-        style(latest).yellow().bold()
+        "  {} {}",
+        style("Latest:").dim(),
+        style(format!("v{}", latest)).yellow().bold()
     );
 
     let asset_name = platform_asset_name()?;
@@ -68,36 +55,14 @@ pub async fn update() -> Result<()> {
     println!();
     let extracted_binary = download_and_extract(&asset.browser_download_url).await?;
 
-    eprintln!(
-        "[DEBUG] Extracted binary exists before replace_self: {}",
-        extracted_binary.exists()
-    );
-
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Applying update...");
+    let spinner = create_spinner("Applying update...");
     replace_self(&extracted_binary)?;
     spinner.finish_and_clear();
 
     // Clean up temporary binary
     let _ = std::fs::remove_file(&extracted_binary);
 
-    println!(
-        "{} {}",
-        style("✓").green().bold(),
-        style("Update complete!").green()
-    );
-    println!(
-        "  {} {}",
-        style("[i]").cyan(),
-        style("Restart envoy to use the new version").dim()
-    );
+    print_success("Update complete!");
     Ok(())
 }
 
@@ -131,18 +96,10 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
     let tmp = tempfile::tempdir()?;
     let archive_path = tmp.path().join("archive");
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Downloading update...");
+    let spinner = create_spinner("Downloading update...");
 
     let bytes = reqwest::get(url).await?.bytes().await?;
-    spinner.set_message("Extracting archive...");
+    spinner.set_message("Extracting archive...".to_string());
     tokio::fs::write(&archive_path, &bytes).await?;
 
     let url_owned = url.to_string();
@@ -166,18 +123,10 @@ async fn download_and_extract(url: &str) -> Result<PathBuf> {
     let persistent_path = std::env::temp_dir().join(format!("envy-update-{}", std::process::id()));
 
     tokio::fs::copy(&binary_in_tmp, &persistent_path).await?;
-    eprintln!(
-        "[DEBUG] Copy complete, persistent file exists: {}",
-        persistent_path.exists()
-    );
 
     spinner.finish_and_clear();
 
-    println!(
-        "{} {}",
-        style("✓").green().bold(),
-        style("Downloaded and extracted").green()
-    );
+    print_success("Downloaded and extracted");
 
     Ok(persistent_path)
 }
@@ -251,4 +200,24 @@ fn replace_self(new_binary: &Path) -> Result<()> {
 
     let _ = std::fs::remove_file(backup);
     Ok(())
+}
+
+pub async fn check_for_update() -> Option<String> {
+    let release = fetch_latest_release().await.ok()?;
+    let latest = release.tag_name.trim_start_matches('v').to_string();
+
+    if latest != CURRENT_VERSION {
+        Some(latest)
+    } else {
+        None
+    }
+}
+
+pub fn print_update_notification(latest_version: &str) {
+    println!();
+    print_warn(&format!(
+        "Update available: v{} → v{}",
+        CURRENT_VERSION, latest_version
+    ));
+    print_info("Run `envy update` to update");
 }

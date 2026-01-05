@@ -1,6 +1,8 @@
 use anyhow::Result;
 use std::fs;
 
+use super::ui::{print_info, print_success};
+
 pub fn save_token(token: &str) -> Result<()> {
     let mut dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
@@ -48,17 +50,9 @@ pub fn logout() -> Result<()> {
 
     if path.exists() {
         fs::remove_file(&path)?;
-        println!(
-            "{} {}",
-            console::style("✓").green().bold(),
-            console::style("Logged out of Envoy.").green()
-        );
+        print_success("Logged out of Envoy.");
     } else {
-        println!(
-            "{} {}",
-            console::style("[i]").cyan(),
-            console::style("Already logged out.").cyan()
-        );
+        print_info("Already logged out.");
     }
 
     Ok(())

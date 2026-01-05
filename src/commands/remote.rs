@@ -1,7 +1,8 @@
 use anyhow::{Result, bail};
+use console::style;
 use std::fs;
 
-use crate::utils::project_config::load_project_config;
+use crate::utils::{project_config::load_project_config, ui::print_success};
 
 pub fn add_remote(name: &str, url: &str) -> Result<()> {
     let _project = load_project_config()?;
@@ -23,12 +24,10 @@ pub fn add_remote(name: &str, url: &str) -> Result<()> {
 
     fs::write(path, toml::to_string_pretty(&value)?)?;
 
-    println!(
-        "{} {} {} {}",
-        console::style("✓").green().bold(),
-        console::style("Added remote").green(),
-        console::style(format!("'{}'", name)).cyan().bold(),
-        console::style(format!("> {}", url)).dim()
-    );
+    print_success(&format!(
+        "Added remote {} {}",
+        style(format!("'{}'", name)).cyan().bold(),
+        style(format!("→ {}", url)).dim()
+    ));
     Ok(())
 }

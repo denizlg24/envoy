@@ -1,5 +1,3 @@
-use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 use crate::utils::{
@@ -7,6 +5,7 @@ use crate::utils::{
     manifest::{load_manifest, save_manifest, write_applied},
     project_config::{get_remote_url, load_project_config},
     storage::{upload_blob, upload_manifest},
+    ui::{create_progress_bar, print_header, print_kv, print_success},
 };
 
 pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> {
@@ -19,15 +18,9 @@ pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     let client = reqwest::Client::new();
 
     let total = manifest.files.len();
-    println!("\n{} Pushing {} files...", style(">").cyan().bold(), total);
+    print_header(&format!("Pushing {} files", total));
 
-    let pb = ProgressBar::new(total as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("█▓▒░"),
-    );
+    let pb = create_progress_bar(total as u64);
 
     let mut uploaded = 0;
 
@@ -71,17 +64,8 @@ pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
 
     write_applied(&manifest_hash)?;
 
-    println!(
-        "{} {} {}",
-        style("✓").green().bold(),
-        style("Uploaded").green(),
-        style(format!("{} blobs", uploaded)).cyan()
-    );
-    println!(
-        "{} {}",
-        style("📦").cyan(),
-        style(format!("Manifest: {}", &manifest_hash[..12])).dim()
-    );
+    print_success(&format!("Uploaded {} blobs", uploaded));
+    print_kv("Manifest:", &manifest_hash[..12]);
 
     Ok(())
 }

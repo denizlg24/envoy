@@ -1,11 +1,13 @@
 use anyhow::{Ok, Result, bail};
 use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::Deserialize;
 use tokio::time::{Duration, Instant, sleep};
 
-use crate::utils::config::{auth_server_url, load_token, logout, save_token};
+use crate::utils::{
+    config::{auth_server_url, load_token, logout, save_token},
+    ui::{create_spinner, print_header, print_info, print_kv, print_success},
+};
 
 #[derive(Deserialize)]
 struct DeviceCodeResponse {
@@ -30,11 +32,7 @@ enum TokenResponse {
 
 pub async fn login() -> Result<()> {
     if load_token().is_ok() {
-        println!(
-            "{} {}",
-            style("[i]").cyan().bold(),
-            style("Already logged in").cyan()
-        );
+        print_info("Already logged in");
         return Ok(());
     }
 
@@ -47,28 +45,16 @@ pub async fn login() -> Result<()> {
         .json::<DeviceCodeResponse>()
         .await?;
 
-    println!(
-        "\n{} {}",
-        style(">").cyan().bold(),
-        style("GitHub Authentication").bold()
-    );
-    println!("  {} {}", style(">").cyan(), device.verification_uri);
+    print_header("GitHub Authentication");
+    print_kv("Open:", &device.verification_uri);
     println!(
         "  {} {}",
-        style("*").cyan(),
+        style("Code:").dim(),
         style(&device.user_code).yellow().bold()
     );
     println!();
 
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
-    spinner.set_message("Waiting for authorization...");
+    let spinner = create_spinner("Waiting for authorization...");
 
     let deadline = Instant::now() + Duration::from_secs(device.expires_in);
 
@@ -101,11 +87,7 @@ pub async fn login() -> Result<()> {
 
             TokenResponse::Success { api_token } => {
                 spinner.finish_and_clear();
-                println!(
-                    "{} {}",
-                    style("✓").green().bold(),
-                    style("Authentication successful!").green()
-                );
+                print_success("Authentication successful!");
                 save_token(&api_token)?;
                 return Ok(());
             }
