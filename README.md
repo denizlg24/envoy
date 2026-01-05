@@ -33,21 +33,6 @@ If you understand Git, Envoy will feel familiar.
 
 ---
 
-## Architecture Overview
-
-```
-.envoy/
-├─ config.toml        # project metadata (tracked)
-├─ latest             # manifest pointer (tracked)
-└─ cache/             # encrypted blobs (ignored)
-```
-
-- Only `config.toml` and `latest` are committed
-- Encrypted data lives in object storage
-- The server never sees plaintext
-
----
-
 ## Installation
 
 ### Quick Install
@@ -114,8 +99,13 @@ This creates the `.envoy/` directory and sets up the default remote (`origin`).
 
 ### 2. Choose files to encrypt
 
-Add files (e.g. `.env`, `.env.local`) using your workflow.  
+Add files (default `.env`) using your workflow.  
 Secrets are tracked internally and never committed to Git.
+
+```bash
+envy encrypt
+envy encrypt --input .env.testing
+```
 
 ### 3. Push encrypted secrets
 
@@ -136,26 +126,6 @@ envy pull
 - Downloads encrypted blobs
 - Decrypts them locally
 - Restores files to their original paths
-
----
-
-## Remotes
-
-Envoy supports Git-style remotes.
-
-```bash
-envy remote add origin http://localhost:3000
-envy remote add prod https://api.envoy.dev
-```
-
-Use a specific remote:
-
-```bash
-envy push prod
-envy pull prod
-```
-
-If omitted, Envoy uses the default remote.
 
 ---
 
@@ -186,7 +156,7 @@ project_id = "..."
 default_remote = "origin"
 
 [remotes]
-origin = "http://localhost:3000"
+origin = "https://envoy-cli.vercel.app/api"
 ```
 
 ---
@@ -201,42 +171,6 @@ origin = "http://localhost:3000"
 - Cache can be deleted at any time
 
 Envoy is designed so the server is **untrusted by default**.
-
----
-
-## Commands
-
-```bash
-envy login
-envy logout
-envy init
-envy push [remote]
-envy pull [remote]
-envy status
-envy remote add <name> <url>
-```
-
----
-
-## Current Status
-
-Envoy is currently **v0.1**.
-
-- Core workflow complete
-- CLI stable
-- APIs subject to change
-- No team sharing yet
-
----
-
-## Roadmap
-
-- `envy whoami`
-- `envy remote list`
-- Garbage collection
-- CI-friendly auth
-- Team projects
-- Conflict detection
 
 ---
 
