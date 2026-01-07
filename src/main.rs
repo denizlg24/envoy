@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Init {} => {
-            let default_passphrase = generate_secure_passphrase(32);
+            let default_passphrase = generate_secure_passphrase(16);
             let root = Path::new(".envoy");
 
             if root.exists() {
@@ -109,8 +109,8 @@ fn main() -> anyhow::Result<()> {
                 "Enter project passphrase",
                 &default_passphrase,
                 Some(|input: &String| {
-                    if input.len() < 32 {
-                        Err("Must be at least 32 characters long".to_string())
+                    if input.len() < 6 {
+                        Err("Must be at least 6 characters long".to_string())
                     } else {
                         Ok(())
                     }
@@ -160,13 +160,13 @@ fn main() -> anyhow::Result<()> {
         },
         Commands::Encrypt { input } => {
             utils::initialized::check_initialized()?;
-            let default_passphrase = generate_secure_passphrase(32);
+            let default_passphrase = generate_secure_passphrase(16);
             let passphrase = match prompt_input_with_default(
                 &format!("Enter passphrase to encrypt {}", input),
                 &default_passphrase,
                 Some(|input: &String| {
-                    if input.len() < 32 {
-                        Err("Must be at least 32 characters long".to_string())
+                    if input.len() < 6 {
+                        Err("Must be at least 6 characters long".to_string())
                     } else {
                         Ok(())
                     }
