@@ -6,8 +6,10 @@ use crate::{
     commands::auth::login,
     utils::{
         config::{auth_server_url, load_token},
+        manifest::{Manifest, save_manifest, write_applied},
+        session::{derive_manifest_key_from_passphrase, save_session},
         ui::{
-            create_spinner, print_header, print_info, print_kv, print_kv_highlight, print_success,
+            create_spinner, print_header, print_kv, print_kv_highlight, print_success, print_warn,
         },
     },
 };
@@ -65,15 +67,10 @@ pub fn ensure_gitignore() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn init_project(name: Option<String>) -> anyhow::Result<()> {
+pub async fn init_project(name: Option<String>, passphrase: &str) -> anyhow::Result<()> {
     let api_token = ensure_logged_in().await?;
 
     let root = Path::new(".envoy");
-
-    if root.exists() {
-        print_info("Envoy project already initialized.");
-        return Ok(());
-    }
 
     let spinner = create_spinner("Creating project...");
 
@@ -111,12 +108,24 @@ origin = "{}"
 
     fs::write(root.join("config.toml"), config)?;
     ensure_gitignore()?;
+
+    let encrypted_project_key = derive_manifest_key_from_passphrase(passphrase, &project_id)?;
+    save_session(&project_id, &encrypted_project_key)?;
+
+    let manifest = Manifest::new();
+
+    let manifest_hash = save_manifest(&manifest)?;
+
+    write_applied(&manifest_hash)?;
+
     spinner.finish_and_clear();
 
     print_header("Project Initialized");
     print_kv_highlight("Name:", &project_name);
     print_kv("Project ID:", &project_id);
-    print_kv("Remote:", &server_url);
+    println!();
+    print_kv("Passphrase:", passphrase);
+    print_warn("Save this passphrase securely! You'll need it for push/pull/status commands.");
     println!();
     print_success("Ready to use! Run `envy push` to upload your .env files.");
 

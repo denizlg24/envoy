@@ -21,17 +21,25 @@ impl Manifest {
         }
     }
 }
-use crate::commands;
+use crate::{
+    commands::crypto::{decrypt_bytes_with_key, encrypt_bytes_with_key},
+    utils::{
+        project_config::load_project_config,
+        session::{clear_session, derive_manifest_key_from_passphrase, load_session, save_session},
+        ui::{print_error, prompt_passphrase},
+    },
+};
 use anyhow::{Result, bail};
-use commands::crypto::encrypt_bytes;
 use hex;
 use sha2::{Digest, Sha256};
 use std::fs;
 
-pub fn save_manifest(manifest: &Manifest, passphrase: &str) -> Result<String> {
+pub fn save_manifest(manifest: &Manifest) -> Result<String> {
     let plaintext = serde_json::to_vec(manifest)?;
 
-    let encrypted = encrypt_bytes(&plaintext, passphrase)?;
+    let manifest_key = get_project_key()?;
+
+    let encrypted = encrypt_bytes_with_key(&plaintext, &manifest_key)?;
 
     let mut hasher = Sha256::new();
     hasher.update(&encrypted);
@@ -45,9 +53,9 @@ pub fn save_manifest(manifest: &Manifest, passphrase: &str) -> Result<String> {
     Ok(hash_hex)
 }
 
-use commands::crypto::decrypt_bytes;
-
-pub fn load_manifest(passphrase: &str) -> Result<Manifest> {
+pub fn load_manifest() -> Result<Manifest> {
+    let project = load_project_config()?;
+    let manifest_key = get_project_key()?;
     if !std::path::Path::new(".envoy/latest").exists() {
         return Ok(Manifest::new());
     }
@@ -57,7 +65,13 @@ pub fn load_manifest(passphrase: &str) -> Result<Manifest> {
 
     let encrypted = fs::read(&path)?;
 
-    let plaintext = decrypt_bytes(&encrypted, passphrase)?;
+    let plaintext = match decrypt_bytes_with_key(&encrypted, &manifest_key) {
+        Ok(plain) => plain,
+        Err(err) => {
+            clear_session(&project.project_id)?;
+            bail!(err);
+        }
+    };
 
     let manifest: Manifest = serde_json::from_slice(&plaintext)?;
 
@@ -83,4 +97,25 @@ pub fn write_applied(hash: &str) -> anyhow::Result<()> {
 
     fs::write(APPLIED_PATH, hash)?;
     Ok(())
+}
+
+pub fn get_project_key() -> Result<Vec<u8>> {
+    let project = load_project_config()?;
+    let session = load_session(&project.project_id)?;
+    let manifest_key = match session {
+        Some(ses) => ses.encrypted_manifest_key,
+        None => {
+            let passphrase = match prompt_passphrase("Project passphrase", 8) {
+                Ok(pass) => pass,
+                Err(e) => {
+                    print_error(&format!("Failed to read passphrase: {}", e));
+                    std::process::exit(1);
+                }
+            };
+            println!();
+            derive_manifest_key_from_passphrase(&passphrase, &project.project_id)?
+        }
+    };
+    save_session(&project.project_id, &manifest_key)?;
+    Ok(manifest_key)
 }

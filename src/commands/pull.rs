@@ -7,11 +7,14 @@ use crate::{
         manifest::{load_manifest, read_applied, write_applied},
         project_config::{get_remote_url, load_project_config},
         storage::{download_blob, download_manifest},
-        ui::{create_progress_bar, create_spinner, print_header, print_success},
+        ui::{
+            create_progress_bar, create_spinner, print_error, print_header, print_success,
+            prompt_input,
+        },
     },
 };
 
-pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> {
+pub async fn pull(remote: Option<&str>) -> anyhow::Result<()> {
     let token = load_token()?;
     let project = load_project_config()?;
     let server = get_remote_url(&project, remote)?;
@@ -45,7 +48,7 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
         spinner.finish_and_clear();
     }
 
-    let manifest = load_manifest(passphrase)?;
+    let manifest = load_manifest()?;
 
     print_header(&format!("Pulling {} files", manifest.files.len()));
 
@@ -82,8 +85,15 @@ pub async fn pull(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
     for (file_path, hash) in &manifest.files {
         let blob_path = Path::new(".envoy/cache").join(format!("{}.blob", hash));
         let encrypted = tokio::fs::read(&blob_path).await?;
-
-        let plaintext = decrypt_bytes(&encrypted, passphrase)?;
+        let file_passphrase =
+            match prompt_input(&format!("Enter passphrase to decrypt {}", file_path)) {
+                Ok(pass) => pass,
+                Err(e) => {
+                    print_error(&format!("Failed to read passphrase: {}", e));
+                    std::process::exit(1);
+                }
+            };
+        let plaintext = decrypt_bytes(&encrypted, &file_passphrase)?;
 
         if let Some(parent) = Path::new(file_path).parent() {
             tokio::fs::create_dir_all(parent).await?;

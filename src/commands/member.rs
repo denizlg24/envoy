@@ -115,7 +115,6 @@ pub async fn list_members() -> anyhow::Result<()> {
     print_header(&format!("Project Members ({})", members.len()));
 
     for member in members {
-        println!();
         if let Some(nickname) = &member.nickname {
             println!("  {} {}", style("•").cyan(), style(nickname).bold());
         } else {
@@ -131,6 +130,7 @@ pub async fn list_members() -> anyhow::Result<()> {
             style("Role:").dim(),
             style(&member.role).yellow()
         );
+        println!();
     }
 
     Ok(())

@@ -6,15 +6,15 @@ use crate::utils::{
 use console::style;
 use std::path::Path;
 
-pub fn status(passphrase: &str) -> anyhow::Result<()> {
+pub fn status() -> anyhow::Result<()> {
     let project = load_project_config()?;
 
     print_header("Envoy Status");
-    print_kv("Project:", &project.project_id);
 
     let latest = match std::fs::read_to_string(".envoy/latest") {
         Ok(v) => v.trim().to_string(),
         Err(_) => {
+            print_kv("Project:", &project.project_id);
             print_info("Manifest: none");
             println!();
             print_warn("State: EMPTY");
@@ -23,25 +23,26 @@ pub fn status(passphrase: &str) -> anyhow::Result<()> {
         }
     };
 
-    let applied = read_applied();
-
-    print_kv("Manifest:", &latest[..12]);
-
-    if let Some(ref applied) = applied {
-        print_kv("Applied:", &applied[..12]);
-    }
-
     let manifest_path = format!(".envoy/cache/{}.blob", latest);
 
     if !Path::new(&manifest_path).exists() {
         println!();
+        print_kv("Project:", &project.project_id);
         print_warn("Manifest blob missing locally");
         print_warn("State: OUT OF SYNC");
         print_info(&format!("Run {}", style("`envy pull`").cyan()));
         return Ok(());
     }
 
-    let manifest = load_manifest(passphrase)?;
+    let manifest = load_manifest()?;
+
+    let applied = read_applied();
+    print_kv("Project:", &project.project_id);
+    print_kv("Manifest:", &latest[..12]);
+
+    if let Some(ref applied) = applied {
+        print_kv("Applied:", &applied[..12]);
+    }
 
     let mut missing = 0;
 

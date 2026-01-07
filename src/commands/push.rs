@@ -8,12 +8,12 @@ use crate::utils::{
     ui::{create_progress_bar, print_header, print_kv, print_success},
 };
 
-pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> {
+pub async fn push(remote: Option<&str>) -> anyhow::Result<()> {
     let token = load_token()?;
     let project = load_project_config()?;
     let server = get_remote_url(&project, remote)?;
 
-    let manifest = load_manifest(passphrase)?;
+    let manifest = load_manifest()?;
 
     let client = reqwest::Client::new();
 
@@ -48,7 +48,7 @@ pub async fn push(passphrase: &str, remote: Option<&str>) -> anyhow::Result<()> 
 
     pb.finish_and_clear();
 
-    let manifest_hash = save_manifest(&manifest, passphrase)?;
+    let manifest_hash = save_manifest(&manifest)?;
 
     let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 

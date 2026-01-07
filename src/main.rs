@@ -1,9 +1,13 @@
+use std::fs::remove_dir_all;
+use std::path::Path;
+
 use clap::{Parser, Subcommand};
-use dialoguer::Password;
 
 use crate::commands::update::{check_for_update, print_update_notification};
 use crate::commands::{auth::logout_command, status::status};
-use crate::utils::ui::{print_error, print_success};
+use crate::utils::ui::{
+    generate_secure_passphrase, print_error, print_info, print_success, prompt_input_with_default,
+};
 
 pub mod commands;
 pub mod utils;
@@ -42,10 +46,8 @@ enum Commands {
         #[arg(short, long, default_value = ".env")]
         input: String,
     },
-    Decrypt {},
-    Init {
-        name: Option<String>,
-    },
+    // Decrypt {},
+    Init {},
     Login {},
     Logout {},
     Update {},
@@ -67,7 +69,6 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
     let is_update_command = matches!(cli.command, Commands::Update {});
@@ -85,15 +86,55 @@ fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        Commands::Init { name } => {
+        Commands::Init {} => {
+            let default_passphrase = generate_secure_passphrase(32);
+            let root = Path::new(".envoy");
+
+            if root.exists() {
+                print_info("Envoy project already initialized.");
+                return Ok(());
+            }
+
+            println!();
+            let project_name =
+                match prompt_input_with_default("Enter project name", "My Envoy Project", None) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        print_error(&format!("Failed to read project name: {}", e));
+                        std::process::exit(1);
+                    }
+                };
+
+            let passphrase = match prompt_input_with_default(
+                "Enter project passphrase",
+                &default_passphrase,
+                Some(|input: &String| {
+                    if input.len() < 32 {
+                        Err("Must be at least 32 characters long".to_string())
+                    } else {
+                        Ok(())
+                    }
+                }),
+            ) {
+                Ok(pass) => pass,
+                Err(e) => {
+                    print_error(&format!("Failed to read passphrase: {}", e));
+                    std::process::exit(1);
+                }
+            };
+
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async { commands::init::init_project(name).await });
+                .block_on(async {
+                    commands::init::init_project(Some(project_name), &passphrase).await
+                });
 
             if let Err(e) = result {
                 print_error(&format!("Initialization failed: {}", e));
+                let root = Path::new(".envoy");
+                remove_dir_all(root)?;
                 std::process::exit(1);
             }
         }
@@ -119,32 +160,45 @@ fn main() -> anyhow::Result<()> {
         },
         Commands::Encrypt { input } => {
             utils::initialized::check_initialized()?;
-            let passphrase = Password::new()
-                .with_prompt("Enter passphrase")
-                .with_confirmation("Confirm passphrase", "Passphrases do not match")
-                .interact()?;
+            let default_passphrase = generate_secure_passphrase(32);
+            let passphrase = match prompt_input_with_default(
+                &format!("Enter passphrase to encrypt {}", input),
+                &default_passphrase,
+                Some(|input: &String| {
+                    if input.len() < 32 {
+                        Err("Must be at least 32 characters long".to_string())
+                    } else {
+                        Ok(())
+                    }
+                }),
+            ) {
+                Ok(pass) => pass,
+                Err(e) => {
+                    print_error(&format!("Failed to read passphrase: {}", e));
+                    std::process::exit(1);
+                }
+            };
 
             commands::crypto::encrypt_file(&input, &passphrase)?;
             print_success("File encrypted successfully");
         }
 
-        Commands::Decrypt {} => {
-            utils::initialized::check_initialized()?;
-            let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
+        // Deprecated since v0.1.5
+        // Commands::Decrypt {} => {
+        //     utils::initialized::check_initialized()?;
+        //     let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
 
-            commands::crypto::decrypt_files(&passphrase)?;
-            print_success("File decrypted successfully");
-        }
-
+        //     commands::crypto::decrypt_files(&passphrase)?;
+        //     print_success("File decrypted successfully");
+        // }
         Commands::Push { remote } => {
             utils::initialized::check_initialized()?;
-            let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
 
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async { commands::push::push(&passphrase, remote.as_deref()).await });
+                .block_on(async { commands::push::push(remote.as_deref()).await });
 
             if let Err(e) = result {
                 print_error(&format!("Push failed: {}", e));
@@ -154,13 +208,11 @@ fn main() -> anyhow::Result<()> {
 
         Commands::Pull { remote } => {
             utils::initialized::check_initialized()?;
-            let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
-
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async { commands::pull::pull(&passphrase, remote.as_deref()).await });
+                .block_on(async { commands::pull::pull(remote.as_deref()).await });
 
             if let Err(e) = result {
                 print_error(&format!("Pull failed: {}", e));
@@ -169,8 +221,7 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Status {} => {
             utils::initialized::check_initialized()?;
-            let passphrase = Password::new().with_prompt("Enter passphrase").interact()?;
-            status(&passphrase)?;
+            status()?;
         }
         Commands::Member { command } => match command {
             MemberCommand::Add { github, nickname } => {
@@ -246,6 +297,5 @@ fn main() -> anyhow::Result<()> {
             print_update_notification(&latest);
         }
     }
-
     Ok(())
 }

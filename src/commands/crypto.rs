@@ -6,7 +6,14 @@ const NONCE_LEN: usize = 24;
 
 const HEADER_LEN: usize = VERSION_LEN + SALT_LEN + NONCE_LEN;
 
-use anyhow::{Ok, Result, bail};
+const KEY_LEN: usize = 32;
+const KEY_BLOB_VERSION: u8 = 2;
+
+const KEY_VERSION_LEN: usize = 1;
+const KEY_NONCE_LEN: usize = 24;
+const KEY_HEADER_LEN: usize = KEY_VERSION_LEN + KEY_NONCE_LEN;
+
+use anyhow::{Result, bail};
 use argon2::{
     Algorithm, Argon2, Params, Version,
     password_hash::rand_core::{OsRng, RngCore},
@@ -48,10 +55,10 @@ pub fn encrypt_bytes(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>> {
 
     let mut output = Vec::with_capacity(HEADER_LEN + ciphertext.len());
 
-    output.push(BLOB_VERSION); // [1] version
-    output.extend_from_slice(&salt); // [16] salt
-    output.extend_from_slice(&nonce_bytes); // [24] nonce
-    output.extend_from_slice(&ciphertext); // [n] ciphertext
+    output.push(BLOB_VERSION);
+    output.extend_from_slice(&salt);
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
 
     pass.zeroize();
     key.zeroize();
@@ -109,8 +116,7 @@ pub fn decrypt_bytes(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>>
 }
 
 pub fn encrypt_file(path: &str, passphrase: &str) -> Result<()> {
-    let mut manifest = load_manifest(passphrase)?;
-
+    let mut manifest = load_manifest()?;
     let plaintext = fs::read(path)?;
 
     let output = encrypt_bytes(&plaintext, passphrase)?;
@@ -124,13 +130,13 @@ pub fn encrypt_file(path: &str, passphrase: &str) -> Result<()> {
     let filename = format!(".envoy/cache/{}.blob", hash_hex);
     fs::write(&filename, &output)?;
     manifest.files.insert(path.to_string(), hash_hex);
-    save_manifest(&manifest, passphrase)?;
+    save_manifest(&manifest)?;
 
     Ok(())
 }
 
 pub fn decrypt_files(passphrase: &str) -> Result<()> {
-    let manifest = load_manifest(passphrase)?;
+    let manifest = load_manifest()?;
     for (filename, blob_hash) in manifest.files {
         let path = format!(".envoy/cache/{}.blob", blob_hash);
         let encrypted = fs::read(&path)?;
@@ -151,4 +157,58 @@ pub fn decrypt_files(passphrase: &str) -> Result<()> {
         fs::write(&filename, plaintext)?;
     }
     Ok(())
+}
+
+pub fn decrypt_bytes_with_key(encrypted_data: &[u8], manifest_key: &[u8]) -> Result<Vec<u8>> {
+    if manifest_key.len() != KEY_LEN {
+        bail!("Invalid manifest key length");
+    }
+
+    if encrypted_data.len() < KEY_HEADER_LEN {
+        bail!("Invalid encrypted blob: too short");
+    }
+
+    let version = encrypted_data[0];
+    if version != KEY_BLOB_VERSION {
+        bail!("Unsupported key-encrypted blob version: {}", version);
+    }
+
+    let nonce_start = KEY_VERSION_LEN;
+    let ciphertext_start = nonce_start + KEY_NONCE_LEN;
+
+    let nonce_bytes = &encrypted_data[nonce_start..ciphertext_start];
+    let ciphertext = &encrypted_data[ciphertext_start..];
+
+    let cipher = XChaCha20Poly1305::new(manifest_key.into());
+    let nonce = XNonce::from_slice(nonce_bytes);
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| anyhow::anyhow!("Decryption failed (wrong key or corrupted data): {}", e))?;
+
+    Ok(plaintext)
+}
+
+pub fn encrypt_bytes_with_key(plaintext: &[u8], manifest_key: &[u8]) -> Result<Vec<u8>> {
+    if manifest_key.len() != KEY_LEN {
+        bail!("Invalid manifest key length");
+    }
+
+    let cipher = XChaCha20Poly1305::new(manifest_key.into());
+
+    let mut nonce_bytes = [0u8; KEY_NONCE_LEN];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
+
+    let mut output = Vec::with_capacity(KEY_HEADER_LEN + ciphertext.len());
+
+    output.push(KEY_BLOB_VERSION);
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
+
+    Ok(output)
 }

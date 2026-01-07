@@ -1,9 +1,10 @@
 use console::{StyledObject, style};
+use dialoguer::Input;
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub const ICON_SUCCESS: &str = "✓";
 pub const ICON_ERROR: &str = "✗";
-pub const ICON_INFO: &str = "·";
+pub const ICON_INFO: &str = "𝙞";
 pub const ICON_ARROW: &str = "→";
 pub const ICON_WARN: &str = "!";
 pub const ICON_BULLET: &str = "•";
@@ -50,6 +51,7 @@ pub fn print_warn(message: &str) {
 
 pub fn print_header(title: &str) {
     println!("\n{} {}", arrow_prefix(), style(title).bold());
+    println!();
 }
 
 pub fn print_kv(key: &str, value: &str) {
@@ -90,4 +92,86 @@ pub fn create_progress_bar(len: u64) -> ProgressBar {
             .progress_chars("━╸─"),
     );
     pb
+}
+
+pub fn prompt_input(prompt: &str) -> anyhow::Result<String> {
+    use dialoguer::theme::ColorfulTheme;
+
+    let theme = ColorfulTheme::default();
+
+    let result: String = Input::with_theme(&theme)
+        .with_prompt(prompt)
+        .interact_text()?;
+
+    Ok(result)
+}
+
+pub fn prompt_passphrase(prompt: &str, min_length: usize) -> anyhow::Result<String> {
+    use dialoguer::theme::ColorfulTheme;
+
+    let theme = ColorfulTheme::default();
+
+    let result: String = Input::with_theme(&theme)
+        .with_prompt(prompt)
+        .validate_with(|input: &String| -> Result<(), String> {
+            if input.len() < min_length {
+                Err(format!(
+                    "Passphrase must be at least {} characters long",
+                    min_length
+                ))
+            } else {
+                Ok(())
+            }
+        })
+        .interact_text()?;
+
+    Ok(result)
+}
+
+pub type InputValidator = fn(&String) -> Result<(), String>;
+
+pub fn prompt_input_with_default(
+    prompt: &str,
+    default: &str,
+    validator: Option<InputValidator>,
+) -> anyhow::Result<String> {
+    use console::style;
+    use dialoguer::theme::ColorfulTheme;
+
+    let theme = ColorfulTheme::default();
+    let default_plain = default.to_string();
+    let styled_default = style(&default_plain).dim().to_string();
+
+    let result: String = if let Some(validate_fn) = validator {
+        Input::with_theme(&theme)
+            .with_prompt(prompt)
+            .default(styled_default.clone())
+            .validate_with(validate_fn)
+            .interact_text()?
+    } else {
+        Input::with_theme(&theme)
+            .with_prompt(prompt)
+            .default(styled_default.clone())
+            .interact_text()?
+    };
+
+    if result == styled_default || result.contains("\x1b[") || result.trim().is_empty() {
+        Ok(default_plain)
+    } else {
+        Ok(result)
+    }
+}
+
+pub fn generate_secure_passphrase(length: usize) -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_=+";
+
+    let mut rng = rand::rng();
+    (0..length)
+        .map(|_| {
+            let idx = rng.random_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
 }
