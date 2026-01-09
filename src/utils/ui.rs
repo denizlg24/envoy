@@ -1,6 +1,7 @@
 use console::{StyledObject, style};
 use dialoguer::Input;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::io::{self, IsTerminal};
 
 pub const ICON_SUCCESS: &str = "✓";
 pub const ICON_ERROR: &str = "✗";
@@ -8,6 +9,20 @@ pub const ICON_INFO: &str = "𝙞";
 pub const ICON_ARROW: &str = "→";
 pub const ICON_WARN: &str = "!";
 pub const ICON_BULLET: &str = "•";
+
+pub fn is_interactive() -> bool {
+    io::stdin().is_terminal()
+}
+
+fn read_line_from_stdin() -> anyhow::Result<String> {
+    use std::io::Read;
+
+    let mut buffer = String::new();
+    io::stdin().read_to_string(&mut buffer)?;
+
+    let line = buffer.lines().next().unwrap_or("").trim().to_string();
+    Ok(line)
+}
 
 pub fn success_prefix() -> StyledObject<&'static str> {
     style(ICON_SUCCESS).green().bold()
@@ -95,6 +110,10 @@ pub fn create_progress_bar(len: u64) -> ProgressBar {
 }
 
 pub fn prompt_input(prompt: &str) -> anyhow::Result<String> {
+    if !is_interactive() {
+        return read_line_from_stdin();
+    }
+
     use dialoguer::theme::ColorfulTheme;
 
     let theme = ColorfulTheme::default();
@@ -107,6 +126,15 @@ pub fn prompt_input(prompt: &str) -> anyhow::Result<String> {
 }
 
 pub fn prompt_passphrase(prompt: &str, min_length: usize) -> anyhow::Result<String> {
+    if !is_interactive() {
+        let input = read_line_from_stdin()?;
+
+        if input.len() < min_length {
+            anyhow::bail!("Passphrase must be at least {} characters long", min_length);
+        }
+        return Ok(input);
+    }
+
     use dialoguer::theme::ColorfulTheme;
 
     let theme = ColorfulTheme::default();
@@ -135,6 +163,21 @@ pub fn prompt_input_with_default(
     default: &str,
     validator: Option<InputValidator>,
 ) -> anyhow::Result<String> {
+    if !is_interactive() {
+        let input = read_line_from_stdin()?;
+        let value = if input.is_empty() {
+            default.to_string()
+        } else {
+            input
+        };
+        if let Some(validate_fn) = validator
+            && let Err(e) = validate_fn(&value)
+        {
+            anyhow::bail!(e);
+        }
+        return Ok(value);
+    }
+
     use console::style;
     use dialoguer::theme::ColorfulTheme;
 

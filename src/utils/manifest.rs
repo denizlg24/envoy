@@ -100,16 +100,22 @@ pub fn write_applied(hash: &str) -> anyhow::Result<()> {
 }
 
 pub fn get_project_key() -> Result<Vec<u8>> {
+    use crate::utils::session::take_passphrase_override;
+
     let project = load_project_config()?;
     let session = load_session(&project.project_id)?;
     let manifest_key = match session {
         Some(ses) => ses.encrypted_manifest_key,
         None => {
-            let passphrase = match prompt_passphrase("Project passphrase", 8) {
-                Ok(pass) => pass,
-                Err(e) => {
-                    print_error(&format!("Failed to read passphrase: {}", e));
-                    std::process::exit(1);
+            let passphrase = if let Some(override_pass) = take_passphrase_override() {
+                override_pass
+            } else {
+                match prompt_passphrase("Project passphrase", 6) {
+                    Ok(pass) => pass,
+                    Err(e) => {
+                        print_error(&format!("Failed to read passphrase: {}", e));
+                        std::process::exit(1);
+                    }
                 }
             };
             println!();

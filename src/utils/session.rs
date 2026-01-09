@@ -6,11 +6,29 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::OnceCell;
 
 static SESSION_KEY: OnceCell<[u8; 32]> = OnceCell::new();
+static PASSPHRASE_OVERRIDE: OnceCell<Mutex<Option<String>>> = OnceCell::new();
+
+pub fn set_passphrase_override(passphrase: Option<String>) {
+    let mutex = PASSPHRASE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    let mut guard = mutex.lock().unwrap();
+    *guard = passphrase;
+}
+
+pub fn take_passphrase_override() -> Option<String> {
+    let mutex = PASSPHRASE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    let mut guard = mutex.lock().unwrap();
+    guard.take()
+}
+
+pub fn clear_passphrase_override() {
+    set_passphrase_override(None);
+}
 
 fn session_key_path() -> PathBuf {
     let mut path = dirs::home_dir().expect("home dir");

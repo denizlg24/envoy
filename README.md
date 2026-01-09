@@ -38,18 +38,21 @@ If you understand Git, Envoy will feel familiar.
 ### Quick Install
 
 **macOS/Linux:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/denizlg24/envoy/master/install.sh | bash
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 iwr -useb https://raw.githubusercontent.com/denizlg24/envoy/master/install.ps1 | iex
 ```
 
 ### From Source
 
-**Requirements**
+#### Requirements
+
 - Rust (stable)
 - Cargo
 
@@ -75,7 +78,7 @@ envy login
 
 This stores an API token in:
 
-```
+```bash
 $HOME/.envoy/config.toml
 ```
 
@@ -129,18 +132,21 @@ envy pull
 
 ---
 
-## Status
+## Quick demos
 
-Check whether your local cache is in sync:
+The following animated demos show common Envoy workflows.
 
-```bash
-envy status
-```
+### Initialize a project
 
-This command is:
-- offline-safe
-- read-only
-- fast
+![Init demo](docs/init_demo.gif)
+
+### Encrypt a file
+
+![Encrypt demo](docs/encrypt_demo.gif)
+
+### Pull and restore secrets
+
+![Pull demo](docs/pull_demo.gif)
 
 ---
 

@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 use crate::commands::update::{check_for_update, print_update_notification};
 use crate::commands::{auth::logout_command, status::status};
+use crate::utils::session::set_passphrase_override;
 use crate::utils::ui::{
     generate_secure_passphrase, print_error, print_info, print_success, prompt_input_with_default,
 };
@@ -45,19 +46,33 @@ enum Commands {
     Encrypt {
         #[arg(short, long, default_value = ".env")]
         input: String,
+        #[arg(short, long)]
+        passphrase: Option<String>,
     },
     // Decrypt {},
-    Init {},
+    Init {
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        passphrase: Option<String>,
+    },
     Login {},
     Logout {},
     Update {},
     Push {
         remote: Option<String>,
+        #[arg(short, long)]
+        passphrase: Option<String>,
     },
     Pull {
         remote: Option<String>,
+        #[arg(short, long)]
+        passphrase: Option<String>,
     },
-    Status {},
+    Status {
+        #[arg(short, long)]
+        passphrase: Option<String>,
+    },
     Remote {
         #[command(subcommand)]
         command: RemoteCommand,
@@ -86,7 +101,10 @@ fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        Commands::Init {} => {
+        Commands::Init {
+            name: cli_name,
+            passphrase: cli_passphrase,
+        } => {
             let default_passphrase = generate_secure_passphrase(16);
             let root = Path::new(".envoy");
 
@@ -95,31 +113,42 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            println!();
-            let project_name =
+            let project_name = if let Some(name) = cli_name {
+                name
+            } else {
+                println!();
                 match prompt_input_with_default("Enter project name", "My Envoy Project", None) {
                     Ok(name) => name,
                     Err(e) => {
                         print_error(&format!("Failed to read project name: {}", e));
                         std::process::exit(1);
                     }
-                };
+                }
+            };
 
-            let passphrase = match prompt_input_with_default(
-                "Enter project passphrase",
-                &default_passphrase,
-                Some(|input: &String| {
-                    if input.len() < 6 {
-                        Err("Must be at least 6 characters long".to_string())
-                    } else {
-                        Ok(())
-                    }
-                }),
-            ) {
-                Ok(pass) => pass,
-                Err(e) => {
-                    print_error(&format!("Failed to read passphrase: {}", e));
+            let passphrase = if let Some(pass) = cli_passphrase {
+                if pass.len() < 6 {
+                    print_error("Passphrase must be at least 6 characters long");
                     std::process::exit(1);
+                }
+                pass
+            } else {
+                match prompt_input_with_default(
+                    "Enter project passphrase",
+                    &default_passphrase,
+                    Some(|input: &String| {
+                        if input.len() < 6 {
+                            Err("Must be at least 6 characters long".to_string())
+                        } else {
+                            Ok(())
+                        }
+                    }),
+                ) {
+                    Ok(pass) => pass,
+                    Err(e) => {
+                        print_error(&format!("Failed to read passphrase: {}", e));
+                        std::process::exit(1);
+                    }
                 }
             };
 
@@ -158,24 +187,36 @@ fn main() -> anyhow::Result<()> {
                 commands::remote::add_remote(&name, &url)?;
             }
         },
-        Commands::Encrypt { input } => {
+        Commands::Encrypt {
+            input,
+            passphrase: cli_passphrase,
+        } => {
             utils::initialized::check_initialized()?;
             let default_passphrase = generate_secure_passphrase(16);
-            let passphrase = match prompt_input_with_default(
-                &format!("Enter passphrase to encrypt {}", input),
-                &default_passphrase,
-                Some(|input: &String| {
-                    if input.len() < 6 {
-                        Err("Must be at least 6 characters long".to_string())
-                    } else {
-                        Ok(())
-                    }
-                }),
-            ) {
-                Ok(pass) => pass,
-                Err(e) => {
-                    print_error(&format!("Failed to read passphrase: {}", e));
+
+            let passphrase = if let Some(pass) = cli_passphrase {
+                if pass.len() < 6 {
+                    print_error("Passphrase must be at least 6 characters long");
                     std::process::exit(1);
+                }
+                pass
+            } else {
+                match prompt_input_with_default(
+                    &format!("Enter passphrase to encrypt {}", input),
+                    &default_passphrase,
+                    Some(|input: &String| {
+                        if input.len() < 6 {
+                            Err("Must be at least 6 characters long".to_string())
+                        } else {
+                            Ok(())
+                        }
+                    }),
+                ) {
+                    Ok(pass) => pass,
+                    Err(e) => {
+                        print_error(&format!("Failed to read passphrase: {}", e));
+                        std::process::exit(1);
+                    }
                 }
             };
 
@@ -191,8 +232,15 @@ fn main() -> anyhow::Result<()> {
         //     commands::crypto::decrypt_files(&passphrase)?;
         //     print_success("File decrypted successfully");
         // }
-        Commands::Push { remote } => {
+        Commands::Push {
+            remote,
+            passphrase: cli_passphrase,
+        } => {
             utils::initialized::check_initialized()?;
+
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
 
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -206,8 +254,16 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Pull { remote } => {
+        Commands::Pull {
+            remote,
+            passphrase: cli_passphrase,
+        } => {
             utils::initialized::check_initialized()?;
+
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+
             let result = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -219,8 +275,15 @@ fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        Commands::Status {} => {
+        Commands::Status {
+            passphrase: cli_passphrase,
+        } => {
             utils::initialized::check_initialized()?;
+
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+
             status()?;
         }
         Commands::Member { command } => match command {
