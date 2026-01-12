@@ -59,5 +59,5 @@ pub fn logout() -> Result<()> {
 }
 
 pub fn auth_server_url() -> String {
-    "http://localhost:3000/api".to_string()
+    "https://envoy-cli.vercel.app/api".to_string()
 }
