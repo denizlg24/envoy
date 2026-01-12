@@ -25,11 +25,11 @@ Envoy is a client-side encrypted secret management tool that implements a Git-li
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        CLIENT                                │
+│                        CLIENT                               │
 │  ┌─────────────┐    ┌──────────────┐    ┌────────────────┐  │
-│  │  Plaintext  │───▶│   Encrypt    │───▶│  Ciphertext    │  │
-│  │  (Secrets)  │    │ XChaCha20-   │    │  (Blob Hash)   │  │
-│  │             │    │ Poly1305     │    │                │  │
+│  │  Plaintext  │──▶     Encrypt     ──▶|  Ciphertext    |  │
+│  │  (Secrets)  │    │  XChaCha20-  │    │  (Blob Hash)   │  │
+│  │             │    │   Poly1305   │    │                │  │
 │  └─────────────┘    └──────────────┘    └────────────────┘  │
 │         │                                       │           │
 │         ▼                                       ▼           │
