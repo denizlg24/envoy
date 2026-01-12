@@ -63,6 +63,10 @@ pub fn load_manifest() -> Result<Manifest> {
     let hash = fs::read_to_string(".envoy/latest")?;
     let path = format!(".envoy/cache/{}.blob", hash.trim());
 
+    if !std::path::Path::new(&path).exists() {
+        return Ok(Manifest::new());
+    }
+
     let encrypted = fs::read(&path)?;
 
     let plaintext = match decrypt_bytes_with_key(&encrypted, &manifest_key) {

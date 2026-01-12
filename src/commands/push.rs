@@ -2,7 +2,8 @@ use std::path::Path;
 
 use crate::utils::{
     commit::{
-        commit_blob_path, commits_ahead_of_remote, read_head, read_remote_head, write_remote_head,
+        commit_blob_path, commits_ahead_of_remote, load_commit, read_head, read_remote_head,
+        write_remote_head,
     },
     config::load_token,
     manifest::{load_manifest, save_manifest, write_applied},
@@ -91,23 +92,30 @@ pub async fn push(remote: Option<&str>) -> anyhow::Result<()> {
         pb.finish_and_clear();
     }
 
-    let manifest_hash = save_manifest(&manifest)?;
-    let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
+    let mut manifest_hashes = std::collections::HashSet::new();
+    for commit_hash in &commits_to_push {
+        let commit = load_commit(commit_hash)?;
+        manifest_hashes.insert(commit.manifest_hash);
+    }
 
     print_header(&format!("Pushing {} commit(s)", commits_to_push.len()));
-    let pb = create_progress_bar((commits_to_push.len() + 2) as u64);
+    let total_uploads = commits_to_push.len() + manifest_hashes.len() + 1; // commits + manifests + HEAD update
+    let pb = create_progress_bar(total_uploads as u64);
 
-    pb.set_message("Uploading manifest...");
-    upload_manifest(
-        &client,
-        &server,
-        &token,
-        &project.project_id,
-        &manifest_hash,
-        &manifest_blob_path,
-    )
-    .await?;
-    pb.inc(1);
+    for manifest_hash in &manifest_hashes {
+        pb.set_message(format!("Uploading manifest {}...", &manifest_hash[..8]));
+        let manifest_blob_path = Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
+        upload_manifest(
+            &client,
+            &server,
+            &token,
+            &project.project_id,
+            manifest_hash,
+            &manifest_blob_path,
+        )
+        .await?;
+        pb.inc(1);
+    }
 
     for commit_hash in commits_to_push.iter().rev() {
         pb.set_message(format!("Uploading commit {}...", &commit_hash[..8]));
@@ -150,7 +158,8 @@ pub async fn push(remote: Option<&str>) -> anyhow::Result<()> {
     pb.inc(1);
     pb.finish_and_clear();
 
-    write_applied(&manifest_hash)?;
+    let head_commit = load_commit(&local_head)?;
+    write_applied(&head_commit.manifest_hash)?;
 
     println!();
     if uploaded > 0 {

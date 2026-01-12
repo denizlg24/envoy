@@ -38,14 +38,14 @@ pub fn ensure_gitignore() -> anyhow::Result<()> {
     let path = Path::new(".gitignore");
 
     let envoy_block = r#"
-# Envoy
-
-!.envoy/
-
+# Envoy - Local state
 .envoy/cache/
-.envoy/*.blob
+.envoy/latest
 .envoy/HEAD
 .envoy/refs/
+
+# Envoy - Config
+!.envoy/config.json
 
 "#;
 
