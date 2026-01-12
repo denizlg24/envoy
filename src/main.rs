@@ -324,7 +324,11 @@ fn main() -> anyhow::Result<()> {
                 set_passphrase_override(cli_passphrase);
             }
 
-            status()?;
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+
+            rt.block_on(status())?;
         }
         Commands::Member { command } => match command {
             MemberCommand::Add { github, nickname } => {

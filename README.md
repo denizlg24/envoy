@@ -148,7 +148,7 @@ envy status
 
 - Shows current manifest state
 - Displays uncommitted changes
-- Shows commits ahead/behind remote
+- Fetches remote to show sync status
 
 ---
 

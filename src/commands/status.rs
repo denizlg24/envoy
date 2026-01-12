@@ -1,16 +1,18 @@
 use crate::utils::{
     commit::{commits_ahead_of_remote, get_head_manifest_hash, read_head, read_remote_head},
+    config::load_token,
     manifest::{
         compute_manifest_content_hash, get_current_manifest_hash, load_manifest,
         load_manifest_by_hash, read_applied,
     },
-    project_config::load_project_config,
+    project_config::{get_remote_url, load_project_config},
+    storage::fetch_remote_head,
     ui::{print_header, print_info, print_kv, print_success, print_warn},
 };
 use console::style;
 use std::path::Path;
 
-pub fn status() -> anyhow::Result<()> {
+pub async fn status() -> anyhow::Result<()> {
     let project = load_project_config()?;
 
     print_header("Envoy Status");
@@ -20,8 +22,24 @@ pub fn status() -> anyhow::Result<()> {
     let manifest = load_manifest()?;
 
     let local_head = read_head();
-    let remote_head = read_remote_head();
+    let local_remote_head = read_remote_head();
     let head_manifest_hash = get_head_manifest_hash();
+
+    let server_remote_head = {
+        if let Ok(token) = load_token() {
+            if let Ok(server) = get_remote_url(&project, None) {
+                let client = reqwest::Client::new();
+                fetch_remote_head(&client, &server, &token, &project.project_id)
+                    .await
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
 
     if let Some(ref hash) = current_manifest_hash {
         print_kv("Manifest", &hash[..12]);
@@ -35,9 +53,14 @@ pub fn status() -> anyhow::Result<()> {
         print_kv("HEAD", &head[..12]);
     }
 
-    if let Some(ref remote) = remote_head {
+    if let Some(ref remote) = local_remote_head {
         print_kv("origin/HEAD", &remote[..12]);
     }
+
+    let has_remote_commits =
+        server_remote_head.is_some() && (local_head.is_none() || server_remote_head != local_head);
+    let is_behind_remote =
+        server_remote_head.is_some() && local_remote_head.as_ref() != server_remote_head.as_ref();
 
     let has_uncommitted_changes = {
         let current_content_hash = compute_manifest_content_hash(&manifest);
@@ -80,12 +103,17 @@ pub fn status() -> anyhow::Result<()> {
             commits_ahead.len()
         ));
     }
-
     if missing_blobs > 0 {
         print_warn("State: MISSING DATA");
         print_info(&format!(
             "{} file(s) missing locally. Run {}",
             missing_blobs,
+            style("`envy pull`").cyan()
+        ));
+    } else if is_behind_remote || (has_remote_commits && local_head.is_none()) {
+        print_warn("State: BEHIND REMOTE");
+        print_info(&format!(
+            "Remote has commits. Run {} to sync.",
             style("`envy pull`").cyan()
         ));
     } else if has_uncommitted_changes {
@@ -118,7 +146,7 @@ pub fn status() -> anyhow::Result<()> {
             "Run {} to restore files locally.",
             style("`envy pull`").cyan()
         ));
-    } else if local_head.is_none() && manifest.files.is_empty() {
+    } else if local_head.is_none() && manifest.files.is_empty() && server_remote_head.is_none() {
         print_info("State: EMPTY");
         print_info(&format!(
             "Run {} to encrypt your first file.",
