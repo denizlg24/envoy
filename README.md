@@ -174,17 +174,19 @@ The following animated demos show common Envoy workflows.
 
 ### Project config (tracked)
 
-`.envoy/config.json`
+`.envoy/config.toml`
 
-```json
-{
-  "version": 1,
-  "project_id": "...",
-  "default_remote": "origin",
-  "remotes": {
-    "origin": "https://envoy-cli.vercel.app/api"
-  }
-}
+```toml
+
+version = 1
+project_id = "..."
+name = "..."
+
+default_remote = "origin"
+
+[remotes]
+origin = "https://envoy-cli.vercel.app/api"
+
 ```
 
 ### Local state (not tracked)
