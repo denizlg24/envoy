@@ -75,10 +75,10 @@ pub async fn add_member(github_id: u64, nickname: &str) -> anyhow::Result<()> {
 
     print_success("Member added successfully!");
     if let Some(nick) = &member.nickname {
-        print_kv("Nickname:", nick);
+        print_kv("Nickname", nick);
     }
-    print_kv("User ID:", &member.user_id);
-    print_kv("Role:", &member.role);
+    print_kv("User ID", &member.user_id);
+    print_kv("Role", &member.role);
 
     Ok(())
 }
@@ -164,10 +164,10 @@ pub async fn remove_member(user_id: &str) -> anyhow::Result<()> {
 
     let deleted = response.deleted_member;
 
-    print_success("Member removed");
-    print_kv("User ID:", &deleted.user_id);
+    print_success("Member removed.");
+    print_kv("User ID", &deleted.user_id);
     if let Some(nickname) = &deleted.nickname {
-        print_kv("Nickname:", nickname);
+        print_kv("Nickname", nickname);
     }
 
     Ok(())
@@ -195,7 +195,7 @@ pub async fn remove_all_members() -> anyhow::Result<()> {
 
     spinner.finish_and_clear();
 
-    print_success(&format!("Removed {} member(s)", response.deleted_count));
+    print_success(&format!("Removed {} member(s).", response.deleted_count));
 
     Ok(())
 }

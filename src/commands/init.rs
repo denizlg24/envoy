@@ -9,7 +9,8 @@ use crate::{
         manifest::{Manifest, save_manifest, write_applied},
         session::{derive_manifest_key_from_passphrase, save_session},
         ui::{
-            create_spinner, print_header, print_kv, print_kv_highlight, print_success, print_warn,
+            create_spinner, print_header, print_info, print_kv, print_kv_highlight, print_success,
+            print_warn,
         },
     },
 };
@@ -43,6 +44,8 @@ pub fn ensure_gitignore() -> anyhow::Result<()> {
 
 .envoy/cache/
 .envoy/*.blob
+.envoy/HEAD
+.envoy/refs/
 
 "#;
 
@@ -87,6 +90,8 @@ pub async fn init_project(name: Option<String>, passphrase: &str) -> anyhow::Res
 
     fs::create_dir(root)?;
     fs::create_dir(root.join("cache"))?;
+    fs::create_dir(root.join("cache").join("commits"))?;
+    fs::create_dir_all(root.join("refs").join("remotes").join("origin"))?;
 
     let project_name = name.unwrap_or_else(|| "My Envoy Project".to_string());
     let server_url = auth_server_url().to_owned();
@@ -121,13 +126,17 @@ origin = "{}"
     spinner.finish_and_clear();
 
     print_header("Project Initialized");
-    print_kv_highlight("Name:", &project_name);
-    print_kv("Project ID:", &project_id);
+    print_kv_highlight("Name", &project_name);
+    print_kv("Project ID", &project_id);
     println!();
-    print_kv("Passphrase:", passphrase);
+    print_kv("Passphrase", passphrase);
     print_warn("Save this passphrase securely! You'll need it for push/pull/status commands.");
     println!();
-    print_success("Ready to use! Run `envy push` to upload your .env files.");
+    print_success("Ready to use!");
+    print_info(&format!(
+        "Run {} to encrypt your first file.",
+        console::style("`envy encrypt -i .env`").cyan()
+    ));
 
     Ok(())
 }

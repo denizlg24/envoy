@@ -82,6 +82,35 @@ pub fn load_manifest() -> Result<Manifest> {
     Ok(manifest)
 }
 
+pub fn load_manifest_by_hash(hash: &str) -> Result<Manifest> {
+    let project = load_project_config()?;
+    let manifest_key = get_project_key()?;
+
+    let path = format!(".envoy/cache/{}.blob", hash.trim());
+
+    if !std::path::Path::new(&path).exists() {
+        bail!("Manifest blob {} not found in cache", &hash[..12]);
+    }
+
+    let encrypted = fs::read(&path)?;
+
+    let plaintext = match decrypt_bytes_with_key(&encrypted, &manifest_key) {
+        Ok(plain) => plain,
+        Err(err) => {
+            clear_session(&project.project_id)?;
+            bail!(err);
+        }
+    };
+
+    let manifest: Manifest = serde_json::from_slice(&plaintext)?;
+
+    if manifest.version != 1 {
+        bail!("Unsupported manifest version {}", manifest.version);
+    }
+
+    Ok(manifest)
+}
+
 const APPLIED_PATH: &str = ".envoy/cache/applied";
 
 pub fn read_applied() -> Option<String> {
@@ -97,6 +126,25 @@ pub fn write_applied(hash: &str) -> anyhow::Result<()> {
 
     fs::write(APPLIED_PATH, hash)?;
     Ok(())
+}
+
+pub fn set_manifest(manifest_hash: &str) -> anyhow::Result<()> {
+    fs::write(".envoy/latest", manifest_hash)?;
+    Ok(())
+}
+
+pub fn get_current_manifest_hash() -> Option<String> {
+    fs::read_to_string(".envoy/latest")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+pub fn compute_manifest_content_hash(manifest: &Manifest) -> String {
+    let plaintext = serde_json::to_vec(manifest).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&plaintext);
+    hex::encode(hasher.finalize())
 }
 
 pub fn get_project_key() -> Result<Vec<u8>> {

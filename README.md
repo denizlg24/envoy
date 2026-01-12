@@ -25,6 +25,7 @@ Envoy is built around a few simple ideas:
 
 - **Secrets are encrypted locally** (never plaintext on the server)
 - **Encrypted blobs are content-addressed** (SHA-256)
+- **Commits track manifest history** (like Git)
 - **Git tracks intent, not data**
 - **Cache is disposable**
 - **Remotes behave like Git remotes**
@@ -110,25 +111,44 @@ envy encrypt
 envy encrypt --input .env.testing
 ```
 
-### 3. Push encrypted secrets
+### 3. Commit changes
+
+```bash
+envy commit -m "Add production secrets"
+```
+
+- Creates an encrypted commit object
+- Links to the current manifest state
+- Updates local HEAD
+
+### 4. Push to remote
 
 ```bash
 envy push
 ```
 
-- Encrypts files locally
-- Uploads encrypted blobs
-- Updates the manifest
+- Uploads encrypted blobs and commits
+- Updates remote HEAD
 
-### 4. Pull and restore secrets
+### 5. Pull and restore secrets
 
 ```bash
 envy pull
 ```
 
-- Downloads encrypted blobs
+- Downloads encrypted blobs and commits
 - Decrypts them locally
 - Restores files to their original paths
+
+### 6. Check status
+
+```bash
+envy status
+```
+
+- Shows current manifest state
+- Displays uncommitted changes
+- Shows commits ahead/behind remote
 
 ---
 
@@ -154,29 +174,61 @@ The following animated demos show common Envoy workflows.
 
 ### Project config (tracked)
 
-`.envoy/config.toml`
+`.envoy/config.json`
 
-```toml
-version = 1
-project_id = "..."
-default_remote = "origin"
-
-[remotes]
-origin = "https://envoy-cli.vercel.app/api"
+```json
+{
+  "version": 1,
+  "project_id": "...",
+  "default_remote": "origin",
+  "remotes": {
+    "origin": "https://envoy-cli.vercel.app/api"
+  }
+}
 ```
+
+### Local state (not tracked)
+
+```
+.envoy/HEAD                      # Current commit hash
+.envoy/refs/remotes/origin/HEAD  # Remote HEAD
+.envoy/latest                    # Current manifest blob hash
+.envoy/cache/                    # Encrypted blobs and commits
+.envoy/sessions/                 # Cached session keys
+```
+
+---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `envy init` | Initialize a new project |
+| `envy encrypt` | Encrypt and track a file |
+| `envy remove` | Remove a file from tracking |
+| `envy commit -m "msg"` | Create a commit |
+| `envy log` | View commit history |
+| `envy status` | Show current state |
+| `envy push` | Push commits to remote |
+| `envy pull` | Pull and restore secrets |
+| `envy login` | Authenticate with GitHub |
+| `envy logout` | Clear authentication |
 
 ---
 
 ## Security Model
 
-- Encryption happens **client-side**
-- Keys are derived using **Argon2id**
-- Data is encrypted using **XChaCha20-Poly1305**
-- Blobs are verified via **SHA-256**
-- Server never sees plaintext
-- Cache can be deleted at any time
+- Encryption happens **client-side only**
+- Keys are derived using **Argon2id** (memory-hard)
+- Data is encrypted using **XChaCha20-Poly1305** (AEAD)
+- Blobs are content-addressed via **SHA-256**
+- Commits are encrypted and linked by parent hash
+- Server never sees plaintext or keys
+- Change detection uses plaintext hashes (never transmitted)
 
 Envoy is designed so the server is **untrusted by default**.
+
+For detailed cryptographic analysis, see [IMPLEMENTATION_SECURITY.md](docs/IMPLEMENTATION_SECURITY.md).
 
 ---
 

@@ -1,11 +1,11 @@
 
 version = 1
-project_id = "19c0232a-11e0-4da4-9b00-b2401e62094d"
-name = "envoy"
+project_id = "5f47a4ff-6d16-41e2-9345-938323668980"
+name = "Envoy"
 
 default_remote = "origin"
 
 [remotes]
-origin = "https://envoy-cli.vercel.app/api"
+origin = "http://localhost:3000/api"
 
 

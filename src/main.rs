@@ -49,6 +49,12 @@ enum Commands {
         #[arg(short, long)]
         passphrase: Option<String>,
     },
+    Remove {
+        #[arg(short, long, default_value = ".env")]
+        input: String,
+        #[arg(short, long)]
+        passphrase: Option<String>,
+    },
     // Decrypt {},
     Init {
         #[arg(short, long)]
@@ -80,6 +86,20 @@ enum Commands {
     Member {
         #[command(subcommand)]
         command: MemberCommand,
+    },
+    Commit {
+        #[arg(short, long)]
+        message: String,
+        #[arg(short, long)]
+        author: Option<String>,
+        #[arg(short, long)]
+        passphrase: Option<String>,
+    },
+    Log {
+        #[arg(short, long, default_value = "10")]
+        count: usize,
+        #[arg(short, long)]
+        passphrase: Option<String>,
     },
 }
 
@@ -254,6 +274,26 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
+        Commands::Remove {
+            input,
+            passphrase: cli_passphrase,
+        } => {
+            utils::initialized::check_initialized()?;
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async { commands::remove::remove_file(&input) });
+
+            if let Err(e) = result {
+                print_error(&format!("Remove file failed: {}", e));
+                std::process::exit(1);
+            }
+        }
+
         Commands::Pull {
             remote,
             passphrase: cli_passphrase,
@@ -348,6 +388,37 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         },
+        Commands::Commit {
+            message,
+            author,
+            passphrase: cli_passphrase,
+        } => {
+            utils::initialized::check_initialized()?;
+
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+
+            if let Err(e) = commands::commit::commit(&message, author) {
+                print_error(&format!("Commit failed: {}", e));
+                std::process::exit(1);
+            }
+        }
+        Commands::Log {
+            count,
+            passphrase: cli_passphrase,
+        } => {
+            utils::initialized::check_initialized()?;
+
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+
+            if let Err(e) = commands::commit::log(count) {
+                print_error(&format!("Log failed: {}", e));
+                std::process::exit(1);
+            }
+        }
     }
 
     if !is_update_command {

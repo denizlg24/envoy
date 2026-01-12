@@ -1,9 +1,11 @@
 pub mod auth;
+pub mod commit;
 pub mod crypto;
 pub mod init;
 pub mod member;
 pub mod pull;
 pub mod push;
 pub mod remote;
+pub mod remove;
 pub mod status;
 pub mod update;
