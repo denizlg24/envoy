@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     commands::crypto::decrypt_bytes,
@@ -136,11 +136,20 @@ async fn pull_with_commits(
                 };
             let plaintext = decrypt_bytes(&encrypted, &file_passphrase)?;
 
-            if let Some(parent) = Path::new(file_path).parent() {
+            let mut normalized = file_path.replace('\\', std::path::MAIN_SEPARATOR_STR);
+            if normalized.starts_with("./") || normalized.starts_with(".\\") {
+                normalized = normalized[2..].to_string();
+            }
+
+            let target_path = PathBuf::from(&normalized);
+
+            if let Some(parent) = target_path.parent()
+                && !parent.as_os_str().is_empty()
+            {
                 tokio::fs::create_dir_all(parent).await?;
             }
 
-            tokio::fs::write(file_path, plaintext).await?;
+            tokio::fs::write(&target_path, plaintext).await?;
             restored += 1;
             pb.inc(1);
         }
@@ -234,11 +243,20 @@ async fn legacy_pull(
                 };
             let plaintext = decrypt_bytes(&encrypted, &file_passphrase)?;
 
-            if let Some(parent) = Path::new(file_path).parent() {
+            let mut normalized = file_path.replace('\\', std::path::MAIN_SEPARATOR_STR);
+            if normalized.starts_with("./") || normalized.starts_with(".\\") {
+                normalized = normalized[2..].to_string();
+            }
+
+            let target_path = PathBuf::from(&normalized);
+
+            if let Some(parent) = target_path.parent()
+                && !parent.as_os_str().is_empty()
+            {
                 tokio::fs::create_dir_all(parent).await?;
             }
 
-            tokio::fs::write(file_path, plaintext).await?;
+            tokio::fs::write(&target_path, plaintext).await?;
             restored += 1;
             pb.inc(1);
         }
