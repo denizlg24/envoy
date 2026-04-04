@@ -24,6 +24,7 @@ use std::fs;
 use zeroize::Zeroize;
 
 use crate::utils::manifest::{load_manifest, save_manifest};
+use crate::utils::paths::normalize_path;
 
 pub fn encrypt_bytes(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>> {
     let mut pass = passphrase.as_bytes().to_vec();
@@ -70,13 +71,16 @@ pub fn decrypt_bytes(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>>
     let mut pass = passphrase.as_bytes().to_vec();
 
     if encrypted_data.len() < HEADER_LEN {
-        bail!("Invalid encrypted file: too short");
+        bail!("Invalid encrypted data: file is too short or corrupted");
     }
 
     let version = encrypted_data[0];
 
     if version != BLOB_VERSION {
-        bail!("Unsupported encrypted blob version: {}", version);
+        bail!(
+            "Unsupported encryption format (version {}). Please update envy.",
+            version
+        );
     }
 
     let salt_start = VERSION_LEN;
@@ -91,23 +95,20 @@ pub fn decrypt_bytes(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>>
         Algorithm::Argon2id,
         Version::V0x13,
         Params::new(19456, 2, 1, Some(32))
-            .map_err(|e| anyhow::anyhow!("Failed to create Argon2 params: {}", e))?,
+            .map_err(|e| anyhow::anyhow!("Failed to initialize encryption: {}", e))?,
     );
 
     let mut key = [0u8; 32];
     argon2
         .hash_password_into(&pass, salt, &mut key)
-        .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to derive encryption key: {}", e))?;
 
     let cipher = XChaCha20Poly1305::new(&key.into());
     let nonce = XNonce::from_slice(nonce_bytes);
 
-    let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| {
-        anyhow::anyhow!(
-            "Decryption failed (wrong password or corrupted file): {}",
-            e
-        )
-    })?;
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| anyhow::anyhow!("Decryption failed: wrong passphrase or corrupted data"))?;
 
     pass.zeroize();
     key.zeroize();
@@ -117,7 +118,11 @@ pub fn decrypt_bytes(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>>
 
 pub fn encrypt_file(path: &str, passphrase: &str) -> Result<()> {
     let mut manifest = load_manifest()?;
-    let plaintext = fs::read(path)?;
+
+    let normalized_path = normalize_path(path);
+
+    let plaintext =
+        fs::read(path).map_err(|e| anyhow::anyhow!("Failed to read file '{}': {}", path, e))?;
 
     let output = encrypt_bytes(&plaintext, passphrase)?;
 
@@ -128,8 +133,10 @@ pub fn encrypt_file(path: &str, passphrase: &str) -> Result<()> {
     let hash_hex = hex::encode(hash);
 
     let filename = format!(".envoy/cache/{}.blob", hash_hex);
-    fs::write(&filename, &output)?;
-    manifest.files.insert(path.to_string(), hash_hex);
+    fs::write(&filename, &output)
+        .map_err(|e| anyhow::anyhow!("Failed to write encrypted blob: {}", e))?;
+
+    manifest.files.insert(normalized_path, hash_hex);
     save_manifest(&manifest)?;
 
     Ok(())
@@ -161,16 +168,19 @@ pub fn decrypt_files(passphrase: &str) -> Result<()> {
 
 pub fn decrypt_bytes_with_key(encrypted_data: &[u8], manifest_key: &[u8]) -> Result<Vec<u8>> {
     if manifest_key.len() != KEY_LEN {
-        bail!("Invalid manifest key length");
+        bail!("Invalid encryption key length");
     }
 
     if encrypted_data.len() < KEY_HEADER_LEN {
-        bail!("Invalid encrypted blob: too short");
+        bail!("Invalid encrypted data: too short or corrupted");
     }
 
     let version = encrypted_data[0];
     if version != KEY_BLOB_VERSION {
-        bail!("Unsupported key-encrypted blob version: {}", version);
+        bail!(
+            "Unsupported encryption format (version {}). Please update envy.",
+            version
+        );
     }
 
     let nonce_start = KEY_VERSION_LEN;
@@ -184,7 +194,7 @@ pub fn decrypt_bytes_with_key(encrypted_data: &[u8], manifest_key: &[u8]) -> Res
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|e| anyhow::anyhow!("Decryption failed (wrong key or corrupted data): {}", e))?;
+        .map_err(|_| anyhow::anyhow!("Decryption failed: wrong passphrase or corrupted data"))?;
 
     Ok(plaintext)
 }

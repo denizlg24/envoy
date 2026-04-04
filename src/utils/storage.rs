@@ -261,6 +261,7 @@ pub async fn download_manifest(
         .bearer_auth(token)
         .send()
         .await?
+        .error_for_status()?
         .json::<SignedUrlResponse>()
         .await?;
 
@@ -271,6 +272,18 @@ pub async fn download_manifest(
         .error_for_status()?
         .bytes()
         .await?;
+
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let computed = format!("{:x}", hasher.finalize());
+    if computed != *manifest_hash {
+        anyhow::bail!(
+            "Manifest integrity check failed: expected {}, got {}",
+            &manifest_hash[..12],
+            &computed[..12]
+        );
+    }
 
     let path = std::path::Path::new(".envoy/cache").join(format!("{}.blob", manifest_hash));
 

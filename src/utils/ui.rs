@@ -135,11 +135,11 @@ pub fn prompt_passphrase(prompt: &str, min_length: usize) -> anyhow::Result<Stri
         return Ok(input);
     }
 
-    use dialoguer::theme::ColorfulTheme;
+    use dialoguer::{Password, theme::ColorfulTheme};
 
     let theme = ColorfulTheme::default();
 
-    let result: String = Input::with_theme(&theme)
+    let result: String = Password::with_theme(&theme)
         .with_prompt(prompt)
         .validate_with(|input: &String| -> Result<(), String> {
             if input.len() < min_length {
@@ -151,7 +151,7 @@ pub fn prompt_passphrase(prompt: &str, min_length: usize) -> anyhow::Result<Stri
                 Ok(())
             }
         })
-        .interact_text()?;
+        .interact()?;
 
     Ok(result)
 }
@@ -217,4 +217,40 @@ pub fn generate_secure_passphrase(length: usize) -> String {
             CHARSET[idx] as char
         })
         .collect()
+}
+
+pub enum PassphraseResult {
+    Passphrase(String),
+    Skip,
+}
+
+pub fn prompt_file_passphrase(file_path: &str) -> anyhow::Result<PassphraseResult> {
+    if !is_interactive() {
+        let input = read_line_from_stdin()?;
+        if input.is_empty() || input.to_lowercase() == "skip" {
+            return Ok(PassphraseResult::Skip);
+        }
+        return Ok(PassphraseResult::Passphrase(input));
+    }
+
+    use dialoguer::{Input, theme::ColorfulTheme};
+
+    let theme = ColorfulTheme::default();
+
+    println!(
+        "  {} Enter passphrase for {} (or 'skip' to skip):",
+        style(ICON_ARROW).cyan(),
+        style(file_path).yellow()
+    );
+
+    let result: String = Input::with_theme(&theme)
+        .with_prompt("Passphrase")
+        .allow_empty(true)
+        .interact_text()?;
+
+    if result.is_empty() || result.to_lowercase() == "skip" {
+        Ok(PassphraseResult::Skip)
+    } else {
+        Ok(PassphraseResult::Passphrase(result))
+    }
 }

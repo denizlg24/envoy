@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::{
     commands::crypto::decrypt_bytes,
@@ -8,11 +8,12 @@ use crate::{
         },
         config::load_token,
         manifest::{load_manifest, read_applied, set_manifest, write_applied},
+        paths::{ensure_parent_exists, normalize_path, to_native_path},
         project_config::{get_remote_url, load_project_config},
         storage::{download_blob, download_commit, download_manifest, fetch_remote_head},
         ui::{
-            create_progress_bar, create_spinner, print_error, print_header, print_kv,
-            print_success, prompt_input,
+            PassphraseResult, create_progress_bar, create_spinner, print_header, print_info,
+            print_kv, print_success, print_warn, prompt_file_passphrase,
         },
     },
 };
@@ -122,40 +123,92 @@ async fn pull_with_commits(
         let pb = create_progress_bar(manifest.files.len() as u64);
         pb.set_message("Restoring files...");
         let mut restored = 0;
+        let mut skipped = 0;
 
         for (file_path, hash) in &manifest.files {
             let blob_path = Path::new(".envoy/cache").join(format!("{}.blob", hash));
-            let encrypted = tokio::fs::read(&blob_path).await?;
-            let file_passphrase =
-                match prompt_input(&format!("Enter passphrase to decrypt {}", file_path)) {
-                    Ok(pass) => pass,
-                    Err(e) => {
-                        print_error(&format!("Failed to read passphrase: {}", e));
-                        std::process::exit(1);
+            let encrypted = tokio::fs::read(&blob_path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to read blob for '{}': {}", file_path, e))?;
+
+            pb.suspend(|| {
+                println!();
+            });
+
+            let passphrase = match prompt_file_passphrase(file_path) {
+                Ok(PassphraseResult::Passphrase(pass)) => pass,
+                Ok(PassphraseResult::Skip) => {
+                    pb.suspend(|| {
+                        print_info(&format!("Skipping '{}'", file_path));
+                    });
+                    skipped += 1;
+                    pb.inc(1);
+                    continue;
+                }
+                Err(e) => {
+                    pb.suspend(|| {
+                        print_warn(&format!(
+                            "Failed to read passphrase for '{}': {}",
+                            file_path, e
+                        ));
+                    });
+                    skipped += 1;
+                    pb.inc(1);
+                    continue;
+                }
+            };
+
+            match decrypt_bytes(&encrypted, &passphrase) {
+                Ok(plaintext) => {
+                    let normalized = normalize_path(file_path);
+                    let target_path = to_native_path(&normalized);
+
+                    if let Err(e) = ensure_parent_exists(&target_path) {
+                        pb.suspend(|| {
+                            print_warn(&format!(
+                                "Failed to create directory for '{}': {}",
+                                file_path, e
+                            ));
+                        });
+                        skipped += 1;
+                        pb.inc(1);
+                        continue;
                     }
-                };
-            let plaintext = decrypt_bytes(&encrypted, &file_passphrase)?;
 
-            let mut normalized = file_path.replace('\\', std::path::MAIN_SEPARATOR_STR);
-            if normalized.starts_with("./") || normalized.starts_with(".\\") {
-                normalized = normalized[2..].to_string();
+                    if let Err(e) = tokio::fs::write(&target_path, plaintext).await {
+                        pb.suspend(|| {
+                            print_warn(&format!(
+                                "Failed to write '{}': {}",
+                                target_path.display(),
+                                e
+                            ));
+                        });
+                        skipped += 1;
+                        pb.inc(1);
+                        continue;
+                    }
+
+                    restored += 1;
+                }
+                Err(_) => {
+                    pb.suspend(|| {
+                        print_warn(&format!("Wrong passphrase for '{}', skipping", file_path));
+                    });
+                    skipped += 1;
+                }
             }
 
-            let target_path = PathBuf::from(&normalized);
-
-            if let Some(parent) = target_path.parent()
-                && !parent.as_os_str().is_empty()
-            {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-
-            tokio::fs::write(&target_path, plaintext).await?;
-            restored += 1;
             pb.inc(1);
         }
 
         pb.finish_and_clear();
-        print_success(&format!("Restored {} file(s).", restored));
+
+        if restored > 0 {
+            print_success(&format!("Restored {} file(s).", restored));
+        }
+        if skipped > 0 {
+            print_info(&format!("Skipped {} file(s).", skipped));
+        }
     }
 
     write_head(remote_head)?;
@@ -226,43 +279,95 @@ async fn legacy_pull(
         }
 
         let mut restored = 0;
+        let mut skipped = 0;
 
         let pb = create_progress_bar(manifest.files.len() as u64);
         pb.set_message("Restoring files...");
 
         for (file_path, hash) in &manifest.files {
             let blob_path = Path::new(".envoy/cache").join(format!("{}.blob", hash));
-            let encrypted = tokio::fs::read(&blob_path).await?;
-            let file_passphrase =
-                match prompt_input(&format!("Enter passphrase to decrypt {}", file_path)) {
-                    Ok(pass) => pass,
-                    Err(e) => {
-                        print_error(&format!("Failed to read passphrase: {}", e));
-                        std::process::exit(1);
+            let encrypted = tokio::fs::read(&blob_path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to read blob for '{}': {}", file_path, e))?;
+
+            pb.suspend(|| {
+                println!();
+            });
+
+            let passphrase = match prompt_file_passphrase(file_path) {
+                Ok(PassphraseResult::Passphrase(pass)) => pass,
+                Ok(PassphraseResult::Skip) => {
+                    pb.suspend(|| {
+                        print_info(&format!("Skipping '{}'", file_path));
+                    });
+                    skipped += 1;
+                    pb.inc(1);
+                    continue;
+                }
+                Err(e) => {
+                    pb.suspend(|| {
+                        print_warn(&format!(
+                            "Failed to read passphrase for '{}': {}",
+                            file_path, e
+                        ));
+                    });
+                    skipped += 1;
+                    pb.inc(1);
+                    continue;
+                }
+            };
+
+            match decrypt_bytes(&encrypted, &passphrase) {
+                Ok(plaintext) => {
+                    let normalized = normalize_path(file_path);
+                    let target_path = to_native_path(&normalized);
+
+                    if let Err(e) = ensure_parent_exists(&target_path) {
+                        pb.suspend(|| {
+                            print_warn(&format!(
+                                "Failed to create directory for '{}': {}",
+                                file_path, e
+                            ));
+                        });
+                        skipped += 1;
+                        pb.inc(1);
+                        continue;
                     }
-                };
-            let plaintext = decrypt_bytes(&encrypted, &file_passphrase)?;
 
-            let mut normalized = file_path.replace('\\', std::path::MAIN_SEPARATOR_STR);
-            if normalized.starts_with("./") || normalized.starts_with(".\\") {
-                normalized = normalized[2..].to_string();
+                    if let Err(e) = tokio::fs::write(&target_path, plaintext).await {
+                        pb.suspend(|| {
+                            print_warn(&format!(
+                                "Failed to write '{}': {}",
+                                target_path.display(),
+                                e
+                            ));
+                        });
+                        skipped += 1;
+                        pb.inc(1);
+                        continue;
+                    }
+
+                    restored += 1;
+                }
+                Err(_) => {
+                    pb.suspend(|| {
+                        print_warn(&format!("Wrong passphrase for '{}', skipping", file_path));
+                    });
+                    skipped += 1;
+                }
             }
 
-            let target_path = PathBuf::from(&normalized);
-
-            if let Some(parent) = target_path.parent()
-                && !parent.as_os_str().is_empty()
-            {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-
-            tokio::fs::write(&target_path, plaintext).await?;
-            restored += 1;
             pb.inc(1);
         }
 
         pb.finish_and_clear();
-        print_success(&format!("Restored {} file(s).", restored));
+
+        if restored > 0 {
+            print_success(&format!("Restored {} file(s).", restored));
+        }
+        if skipped > 0 {
+            print_info(&format!("Skipped {} file(s).", skipped));
+        }
     }
 
     write_applied(&manifest_hash)?;

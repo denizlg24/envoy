@@ -10,10 +10,11 @@ This document provides a comprehensive security analysis of Envoy's cryptographi
 4. [Encryption Scheme](#encryption-scheme)
 5. [Content Addressing](#content-addressing)
 6. [Change Detection Security](#change-detection-security)
-7. [Threat Model](#threat-model)
-8. [Security Properties](#security-properties)
-9. [Potential Weaknesses](#potential-weaknesses)
-10. [Recommendations](#recommendations)
+7. [Per-File Encryption Model](#per-file-encryption-model)
+8. [Threat Model](#threat-model)
+9. [Security Properties](#security-properties)
+10. [Potential Weaknesses](#potential-weaknesses)
+11. [Recommendations](#recommendations)
 
 ---
 
@@ -318,6 +319,52 @@ SHA-256's collision resistance ensures:
 
 ---
 
+## Per-File Encryption Model
+
+Envoy implements a **per-file passphrase** system, where each encrypted file can have its own unique passphrase. This is a deliberate design choice that enables granular access control.
+
+### Use Case: Selective Secret Sharing
+
+Consider a project with multiple environment files:
+- `.env.development` - Development secrets (can be shared broadly)
+- `.env.staging` - Staging secrets (limited team access)
+- `.env.production` - Production secrets (restricted access)
+
+With per-file passphrases, you can:
+1. Share `.env.development` passphrase with the entire team
+2. Share `.env.staging` passphrase only with senior developers
+3. Share `.env.production` passphrase only with DevOps/SRE
+
+### Security Properties
+
+| Property | Status | Notes |
+|----------|--------|-------|
+| Independent encryption | ✅ | Each file encrypted with its own key |
+| Key isolation | ✅ | Compromise of one passphrase doesn't affect others |
+| Selective sharing | ✅ | Different access levels per file |
+| No key escrow | ✅ | Server never knows any passphrases |
+
+### Trade-offs
+
+**Pros:**
+- Fine-grained access control without ACLs
+- No server-side permission management needed
+- Simple mental model: "know the password = have access"
+
+**Cons:**
+- Multiple passphrases to remember/manage
+- No built-in passphrase recovery mechanism
+- User must enter passphrase for each file during `pull`
+
+### Best Practices
+
+1. **Use a password manager** to store per-file passphrases
+2. **Document which passphrases are shared with whom** (out-of-band)
+3. **Consider using the same passphrase** for files with identical access requirements
+4. **Rotate passphrases** when team members leave
+
+---
+
 ## Security Properties
 
 ### Confidentiality
@@ -425,6 +472,6 @@ The implementation maintains the zero-trust model while enabling practical featu
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: January 12, 2026*  
-*Applies to: Envoy v0.2.0+*
+*Document Version: 1.1*  
+*Last Updated: April 4, 2026*  
+*Applies to: Envoy v0.2.4+*

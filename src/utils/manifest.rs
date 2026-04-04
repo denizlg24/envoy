@@ -35,7 +35,8 @@ use sha2::{Digest, Sha256};
 use std::fs;
 
 pub fn save_manifest(manifest: &Manifest) -> Result<String> {
-    let plaintext = serde_json::to_vec(manifest)?;
+    let plaintext = serde_json::to_vec(manifest)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize manifest: {}", e))?;
 
     let manifest_key = get_project_key()?;
 
@@ -46,9 +47,11 @@ pub fn save_manifest(manifest: &Manifest) -> Result<String> {
     let hash_hex = hex::encode(hasher.finalize());
 
     let path = format!(".envoy/cache/{}.blob", hash_hex);
-    fs::write(&path, encrypted)?;
+    fs::write(&path, encrypted)
+        .map_err(|e| anyhow::anyhow!("Failed to write manifest blob: {}", e))?;
 
-    fs::write(".envoy/latest", &hash_hex)?;
+    fs::write(".envoy/latest", &hash_hex)
+        .map_err(|e| anyhow::anyhow!("Failed to update latest manifest reference: {}", e))?;
 
     Ok(hash_hex)
 }
@@ -60,27 +63,33 @@ pub fn load_manifest() -> Result<Manifest> {
         return Ok(Manifest::new());
     }
 
-    let hash = fs::read_to_string(".envoy/latest")?;
+    let hash = fs::read_to_string(".envoy/latest")
+        .map_err(|e| anyhow::anyhow!("Failed to read manifest reference: {}", e))?;
     let path = format!(".envoy/cache/{}.blob", hash.trim());
 
     if !std::path::Path::new(&path).exists() {
         return Ok(Manifest::new());
     }
 
-    let encrypted = fs::read(&path)?;
+    let encrypted =
+        fs::read(&path).map_err(|e| anyhow::anyhow!("Failed to read manifest blob: {}", e))?;
 
     let plaintext = match decrypt_bytes_with_key(&encrypted, &manifest_key) {
         Ok(plain) => plain,
-        Err(err) => {
+        Err(_) => {
             clear_session(&project.project_id)?;
-            bail!(err);
+            bail!("Failed to decrypt manifest. The passphrase may be incorrect.");
         }
     };
 
-    let manifest: Manifest = serde_json::from_slice(&plaintext)?;
+    let manifest: Manifest = serde_json::from_slice(&plaintext)
+        .map_err(|e| anyhow::anyhow!("Failed to parse manifest: {}", e))?;
 
     if manifest.version != 1 {
-        bail!("Unsupported manifest version {}", manifest.version);
+        bail!(
+            "Unsupported manifest version {}. Please update envy.",
+            manifest.version
+        );
     }
 
     Ok(manifest)
@@ -93,23 +102,34 @@ pub fn load_manifest_by_hash(hash: &str) -> Result<Manifest> {
     let path = format!(".envoy/cache/{}.blob", hash.trim());
 
     if !std::path::Path::new(&path).exists() {
-        bail!("Manifest blob {} not found in cache", &hash[..12]);
+        bail!(
+            "Manifest blob {} not found in cache. Run `envy pull` to fetch it.",
+            &hash[..12]
+        );
     }
 
-    let encrypted = fs::read(&path)?;
+    let encrypted = fs::read(&path)
+        .map_err(|e| anyhow::anyhow!("Failed to read manifest blob {}: {}", &hash[..12], e))?;
 
     let plaintext = match decrypt_bytes_with_key(&encrypted, &manifest_key) {
         Ok(plain) => plain,
-        Err(err) => {
+        Err(_) => {
             clear_session(&project.project_id)?;
-            bail!(err);
+            bail!(
+                "Failed to decrypt manifest {}. The passphrase may be incorrect.",
+                &hash[..12]
+            );
         }
     };
 
-    let manifest: Manifest = serde_json::from_slice(&plaintext)?;
+    let manifest: Manifest = serde_json::from_slice(&plaintext)
+        .map_err(|e| anyhow::anyhow!("Failed to parse manifest {}: {}", &hash[..12], e))?;
 
     if manifest.version != 1 {
-        bail!("Unsupported manifest version {}", manifest.version);
+        bail!(
+            "Unsupported manifest version {}. Please update envy.",
+            manifest.version
+        );
     }
 
     Ok(manifest)
@@ -157,7 +177,7 @@ pub fn get_project_key() -> Result<Vec<u8>> {
     let project = load_project_config()?;
     let session = load_session(&project.project_id)?;
     let manifest_key = match session {
-        Some(ses) => ses.encrypted_manifest_key,
+        Some(ses) => ses.manifest_key,
         None => {
             let passphrase = if let Some(override_pass) = take_passphrase_override() {
                 override_pass

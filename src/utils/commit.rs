@@ -79,7 +79,8 @@ pub fn write_remote_head(commit_hash: &str) -> Result<()> {
 pub fn save_commit(commit: &Commit) -> Result<String> {
     let manifest_key = get_project_key()?;
 
-    let plaintext = serde_json::to_vec(commit)?;
+    let plaintext = serde_json::to_vec(commit)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize commit: {}", e))?;
 
     let encrypted = encrypt_bytes_with_key(&plaintext, &manifest_key)?;
 
@@ -87,10 +88,12 @@ pub fn save_commit(commit: &Commit) -> Result<String> {
     hasher.update(&encrypted);
     let hash_hex = hex::encode(hasher.finalize());
 
-    fs::create_dir_all(COMMITS_DIR)?;
+    fs::create_dir_all(COMMITS_DIR)
+        .map_err(|e| anyhow::anyhow!("Failed to create commits directory: {}", e))?;
 
     let path = format!("{}/{}.blob", COMMITS_DIR, hash_hex);
-    fs::write(&path, encrypted)?;
+    fs::write(&path, encrypted)
+        .map_err(|e| anyhow::anyhow!("Failed to write commit {}: {}", &hash_hex[..8], e))?;
 
     Ok(hash_hex)
 }
@@ -108,15 +111,30 @@ pub fn load_commit(commit_hash: &str) -> Result<Commit> {
     let path = format!("{}/{}.blob", COMMITS_DIR, commit_hash);
 
     if !Path::new(&path).exists() {
-        bail!("Commit {} not found locally", &commit_hash[..8]);
+        bail!(
+            "Commit {} not found locally. Run `envy pull` to fetch it.",
+            &commit_hash[..8]
+        );
     }
 
-    let encrypted = fs::read(&path)?;
-    let plaintext = decrypt_bytes_with_key(&encrypted, &manifest_key)?;
-    let commit: Commit = serde_json::from_slice(&plaintext)?;
+    let encrypted = fs::read(&path)
+        .map_err(|e| anyhow::anyhow!("Failed to read commit {}: {}", &commit_hash[..8], e))?;
+
+    let plaintext = decrypt_bytes_with_key(&encrypted, &manifest_key).map_err(|_| {
+        anyhow::anyhow!(
+            "Failed to decrypt commit {}. The passphrase may be incorrect.",
+            &commit_hash[..8]
+        )
+    })?;
+
+    let commit: Commit = serde_json::from_slice(&plaintext)
+        .map_err(|e| anyhow::anyhow!("Failed to parse commit {}: {}", &commit_hash[..8], e))?;
 
     if commit.version != 1 {
-        bail!("Unsupported commit version {}", commit.version);
+        bail!(
+            "Unsupported commit version {}. Please update envy.",
+            commit.version
+        );
     }
 
     Ok(commit)

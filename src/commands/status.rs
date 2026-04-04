@@ -3,7 +3,7 @@ use crate::utils::{
     config::load_token,
     manifest::{
         compute_manifest_content_hash, get_current_manifest_hash, load_manifest,
-        load_manifest_by_hash, read_applied,
+        load_manifest_by_hash,
     },
     project_config::{get_remote_url, load_project_config},
     storage::fetch_remote_head,
@@ -57,29 +57,26 @@ pub async fn status() -> anyhow::Result<()> {
         print_kv("origin/HEAD", &remote[..12]);
     }
 
-    let has_remote_commits =
-        server_remote_head.is_some() && (local_head.is_none() || server_remote_head != local_head);
     let is_behind_remote =
         server_remote_head.is_some() && local_remote_head.as_ref() != server_remote_head.as_ref();
+
+    let has_new_remote_commits =
+        server_remote_head.is_some() && local_head.as_ref() != server_remote_head.as_ref();
 
     let has_uncommitted_changes = {
         let current_content_hash = compute_manifest_content_hash(&manifest);
         match head_manifest_hash {
-            Some(ref head_hash) => {
-                match load_manifest_by_hash(head_hash) {
-                    Ok(head_manifest) => {
-                        let head_content_hash = compute_manifest_content_hash(&head_manifest);
-                        current_content_hash != head_content_hash
-                    }
-                    Err(_) => true, // Can't load head manifest, assume changes exist
+            Some(ref head_hash) => match load_manifest_by_hash(head_hash) {
+                Ok(head_manifest) => {
+                    let head_content_hash = compute_manifest_content_hash(&head_manifest);
+                    current_content_hash != head_content_hash
                 }
-            }
-            None => {
-                // No HEAD commit yet - uncommitted if there are files to commit
-                !manifest.files.is_empty()
-            }
+                Err(_) => true,
+            },
+            None => !manifest.files.is_empty(),
         }
     };
+
     let commits_ahead = commits_ahead_of_remote().unwrap_or_default();
     let has_unpushed_commits = !commits_ahead.is_empty();
 
@@ -91,10 +88,6 @@ pub async fn status() -> anyhow::Result<()> {
         }
     }
 
-    // Check if files are applied locally
-    let applied = read_applied();
-    let is_applied = applied.as_ref() == current_manifest_hash.as_ref();
-
     println!();
 
     if has_unpushed_commits {
@@ -103,6 +96,7 @@ pub async fn status() -> anyhow::Result<()> {
             commits_ahead.len()
         ));
     }
+
     if missing_blobs > 0 {
         print_warn("State: MISSING DATA");
         print_info(&format!(
@@ -110,10 +104,10 @@ pub async fn status() -> anyhow::Result<()> {
             missing_blobs,
             style("`envy pull`").cyan()
         ));
-    } else if is_behind_remote || (has_remote_commits && local_head.is_none()) {
+    } else if is_behind_remote || (has_new_remote_commits && local_head.is_none()) {
         print_warn("State: BEHIND REMOTE");
         print_info(&format!(
-            "Remote has commits. Run {} to sync.",
+            "Remote has new commits. Run {} to sync.",
             style("`envy pull`").cyan()
         ));
     } else if has_uncommitted_changes {
@@ -139,12 +133,6 @@ pub async fn status() -> anyhow::Result<()> {
         print_info(&format!(
             "Run {} to sync with remote.",
             style("`envy push`").cyan()
-        ));
-    } else if !is_applied && current_manifest_hash.is_some() {
-        print_warn("State: NOT APPLIED");
-        print_info(&format!(
-            "Run {} to restore files locally.",
-            style("`envy pull`").cyan()
         ));
     } else if local_head.is_none() && manifest.files.is_empty() && server_remote_head.is_none() {
         print_info("State: EMPTY");

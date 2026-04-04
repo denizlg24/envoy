@@ -53,11 +53,15 @@ fn get_or_init_session_key() -> &'static [u8; 32] {
         let mut key = [0u8; 32];
         OsRng.fill_bytes(&mut key);
 
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
+        if let Some(parent) = path.parent()
+            && let Err(e) = fs::create_dir_all(parent)
+        {
+            eprintln!("Warning: Failed to create session directory: {}", e);
         }
 
-        let _ = fs::write(&path, key);
+        if let Err(e) = fs::write(&path, key) {
+            eprintln!("Warning: Failed to persist session key: {}", e);
+        }
 
         #[cfg(unix)]
         {
@@ -74,7 +78,7 @@ const SESSION_TTL_SECS: u64 = 15 * 60;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Session {
     pub project_id: String,
-    pub encrypted_manifest_key: Vec<u8>,
+    pub manifest_key: Vec<u8>,
     pub expires_at: u64,
 }
 
@@ -129,44 +133,39 @@ pub fn load_session(project_id: &str) -> anyhow::Result<Option<Session>> {
     if let Some(session) = store.sessions.get(project_id) {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
-        if session.expires_at < now {
-            let _ = clear_session(project_id);
-            return Ok(None);
-        }
-
-        if session.project_id != project_id || session.expires_at < now {
-            clear_session(&session.project_id)?;
+        if session.expires_at < now || session.project_id != project_id {
+            clear_session(project_id)?;
             return Ok(None);
         }
 
         let key = decrypt_manifest_key(
-            &session.encrypted_manifest_key,
+            &session.manifest_key,
             &session.project_id,
             session.expires_at,
         )?;
 
         let final_session = Session {
             project_id: project_id.to_string(),
-            encrypted_manifest_key: key,
+            manifest_key: key,
             expires_at: session.expires_at,
         };
 
-        Ok(Some(final_session.clone()))
+        Ok(Some(final_session))
     } else {
         Ok(None)
     }
 }
 
-pub fn save_session(project_id: &str, encrypted_manifest_key: &[u8]) -> anyhow::Result<()> {
+pub fn save_session(project_id: &str, manifest_key: &[u8]) -> anyhow::Result<()> {
     let mut store = load_store()?;
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let expires_at = now + SESSION_TTL_SECS;
 
-    let encrypted_key = encrypt_manifest_key(encrypted_manifest_key, project_id, expires_at)?;
+    let encrypted_key = encrypt_manifest_key(manifest_key, project_id, expires_at)?;
 
     let session = Session {
         project_id: project_id.to_string(),
-        encrypted_manifest_key: encrypted_key,
+        manifest_key: encrypted_key,
         expires_at,
     };
 
