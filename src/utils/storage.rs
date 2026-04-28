@@ -6,6 +6,25 @@ struct SignedUrlResponse {
     url: String,
 }
 
+async fn parse_signed_url_response(
+    response: reqwest::Response,
+    action: &str,
+) -> anyhow::Result<SignedUrlResponse> {
+    let status = response.status();
+    let body = response.text().await?;
+
+    if !status.is_success() {
+        if body.trim().is_empty() {
+            anyhow::bail!("{} failed with HTTP {}", action, status);
+        }
+
+        anyhow::bail!("{} failed with HTTP {}: {}", action, status, body);
+    }
+
+    serde_json::from_str(&body)
+        .map_err(|e| anyhow::anyhow!("Failed to parse {} response: {}", action, e))
+}
+
 #[derive(serde::Deserialize)]
 struct HeadResponse {
     head: Option<String>,
@@ -55,7 +74,7 @@ pub async fn update_remote_head(
         .send()
         .await?;
 
-    if response.status() == 400 {
+    if response.status() == 400 || response.status() == 409 {
         anyhow::bail!("Remote HEAD has changed. Pull first, then push again.");
     }
 
@@ -71,16 +90,15 @@ pub async fn upload_commit(
     commit_hash: &str,
     commit_path: &Path,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .post(format!(
             "{}/projects/{}/blobs/{}/upload?type=commit",
             server, project_id, commit_hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "commit upload URL request").await?;
 
     if res.method.to_uppercase() != "PUT" {
         anyhow::bail!("Expected PUT method, got {}", res.method);
@@ -105,16 +123,15 @@ pub async fn download_commit(
     project_id: &str,
     commit_hash: &str,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .get(format!(
             "{}/projects/{}/blobs/{}/download?type=commit",
             server, project_id, commit_hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "commit download URL request").await?;
 
     let bytes = client
         .get(&res.url)
@@ -147,16 +164,15 @@ pub async fn upload_blob(
     hash: &str,
     blob_path: &std::path::Path,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .post(format!(
             "{}/projects/{}/blobs/{}/upload",
             server, project_id, hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "blob upload URL request").await?;
 
     if res.method.to_uppercase() != "PUT" {
         anyhow::bail!("Expected PUT method, got {}", res.method);
@@ -181,16 +197,15 @@ pub async fn download_blob(
     project_id: &str,
     hash: &str,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .get(format!(
             "{}/projects/{}/blobs/{}/download",
             server, project_id, hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "blob download URL request").await?;
 
     let bytes = client
         .get(&res.url)
@@ -223,16 +238,19 @@ pub async fn upload_manifest(
     manifest_hash: &str,
     manifest_path: &Path,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .post(format!(
             "{}/projects/{}/blobs/{}/upload?type=manifest",
             server, project_id, manifest_hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "manifest upload URL request").await?;
+
+    if res.method.to_uppercase() != "PUT" {
+        anyhow::bail!("Expected PUT method, got {}", res.method);
+    }
 
     let bytes = tokio::fs::read(manifest_path).await?;
 
@@ -253,17 +271,15 @@ pub async fn download_manifest(
     project_id: &str,
     manifest_hash: &str,
 ) -> anyhow::Result<()> {
-    let res: SignedUrlResponse = client
+    let response = client
         .get(format!(
             "{}/projects/{}/blobs/{}/download?type=manifest",
             server, project_id, manifest_hash
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .error_for_status()?
-        .json::<SignedUrlResponse>()
         .await?;
+    let res = parse_signed_url_response(response, "manifest download URL request").await?;
 
     let bytes = client
         .get(&res.url)

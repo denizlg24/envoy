@@ -79,6 +79,11 @@ enum Commands {
         #[arg(short, long)]
         passphrase: Option<String>,
     },
+    Doctor {
+        remote: Option<String>,
+        #[arg(short, long)]
+        passphrase: Option<String>,
+    },
     Remote {
         #[command(subcommand)]
         command: RemoteCommand,
@@ -329,6 +334,20 @@ fn main() -> anyhow::Result<()> {
                 .build()?;
 
             rt.block_on(status())?;
+        }
+        Commands::Doctor {
+            remote,
+            passphrase: cli_passphrase,
+        } => {
+            if cli_passphrase.is_some() {
+                set_passphrase_override(cli_passphrase);
+            }
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+
+            rt.block_on(commands::doctor::doctor(remote.as_deref()))?;
         }
         Commands::Member { command } => match command {
             MemberCommand::Add { github, nickname } => {

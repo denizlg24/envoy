@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod commit;
 pub mod crypto;
+pub mod doctor;
 pub mod init;
 pub mod member;
 pub mod pull;
