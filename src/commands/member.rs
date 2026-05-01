@@ -45,6 +45,25 @@ struct RemoveAllMembersResponse {
     deleted_count: u32,
 }
 
+async fn parse_api_response<T: for<'de> Deserialize<'de>>(
+    response: reqwest::Response,
+    action: &str,
+) -> anyhow::Result<T> {
+    let status = response.status();
+    let body = response.text().await?;
+
+    if !status.is_success() {
+        if body.trim().is_empty() {
+            anyhow::bail!("{} failed with HTTP {}", action, status);
+        }
+
+        anyhow::bail!("{} failed with HTTP {}: {}", action, status, body);
+    }
+
+    serde_json::from_str(&body)
+        .map_err(|e| anyhow::anyhow!("Failed to parse {} response: {}", action, e))
+}
+
 pub async fn add_member(github_id: u64, nickname: &str) -> anyhow::Result<()> {
     let token = load_token()?;
     let project = load_project_config()?;
@@ -64,10 +83,8 @@ pub async fn add_member(github_id: u64, nickname: &str) -> anyhow::Result<()> {
             "nickname": nickname
         }))
         .send()
-        .await?
-        .error_for_status()?
-        .json::<ProjectMemberResponse>()
         .await?;
+    let response: ProjectMemberResponse = parse_api_response(response, "Add member").await?;
 
     spinner.finish_and_clear();
 
@@ -98,10 +115,8 @@ pub async fn list_members() -> anyhow::Result<()> {
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .error_for_status()?
-        .json::<ListMembersResponse>()
         .await?;
+    let response: ListMembersResponse = parse_api_response(response, "List members").await?;
 
     spinner.finish_and_clear();
 
@@ -155,10 +170,8 @@ pub async fn remove_member(user_id: &str) -> anyhow::Result<()> {
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .error_for_status()?
-        .json::<RemoveMemberResponse>()
         .await?;
+    let response: RemoveMemberResponse = parse_api_response(response, "Remove member").await?;
 
     spinner.finish_and_clear();
 
@@ -188,10 +201,9 @@ pub async fn remove_all_members() -> anyhow::Result<()> {
         ))
         .bearer_auth(token)
         .send()
-        .await?
-        .error_for_status()?
-        .json::<RemoveAllMembersResponse>()
         .await?;
+    let response: RemoveAllMembersResponse =
+        parse_api_response(response, "Remove all members").await?;
 
     spinner.finish_and_clear();
 
