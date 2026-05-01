@@ -78,6 +78,7 @@ const SESSION_TTL_SECS: u64 = 15 * 60;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Session {
     pub project_id: String,
+    #[serde(alias = "encrypted_manifest_key")]
     pub manifest_key: Vec<u8>,
     pub expires_at: u64,
 }
